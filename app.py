@@ -37,7 +37,7 @@ def analyze():
         
         return jsonify({
             'success': True,
-            'message': f'{company_name} şirketi için analiz başlatıldı. Bu işlem 5-10 dakika sürebilir.',
+            'message': f'{company_name} şirketi için analiz başlatıldı. Bu işlem birkaç saniye sürebilir.',
             'file_id': filename
         })
         
