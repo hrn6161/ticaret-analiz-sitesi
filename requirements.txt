@@ -1,0 +1,8 @@
+Flask==2.3.3
+pandas==2.0.3
+selenium==4.11.2
+webdriver-manager==4.0.1
+openpyxl==3.1.2
+matplotlib==3.7.2
+beautifulsoup4==4.12.2
+requests==2.31.0
