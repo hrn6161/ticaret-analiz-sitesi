@@ -1,11 +1,9 @@
 from flask import Flask, render_template, request, send_file, jsonify
+import pandas as pd
 import threading
 import os
 import time
 from analiz_kodu import run_analysis_for_company
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill
-import io
 
 app = Flask(__name__)
 
@@ -39,7 +37,7 @@ def analyze():
         
         return jsonify({
             'success': True,
-            'message': f'{company_name} şirketi için analiz başlatıldı. Bu işlem birkaç saniye sürebilir.',
+            'message': f'{company_name} şirketi için analiz başlatıldı. Bu işlem 5-10 dakika sürebilir.',
             'file_id': filename
         })
         
@@ -51,40 +49,17 @@ def run_analysis_in_thread(company_name, country, filepath):
         results = run_analysis_for_company(company_name, country)
         
         if results:
-            # Pandas olmadan Excel oluştur
-            wb = Workbook()
-            ws = wb.active
-            ws.title = "Analiz Sonuçları"
-            
-            # Başlıklar
-            headers = list(results[0].keys())
-            for col, header in enumerate(headers, 1):
-                ws.cell(row=1, column=col, value=header)
-                ws.cell(row=1, column=col).font = Font(bold=True)
-            
-            # Veriler
-            for row, result in enumerate(results, 2):
-                for col, key in enumerate(headers, 1):
-                    ws.cell(row=row, column=col, value=result[key])
-            
-            wb.save(filepath)
+            df = pd.DataFrame(results)
+            df.to_excel(filepath, index=False)
             print(f"✅ Analiz tamamlandı: {filepath}")
         else:
-            # Boş Excel oluştur
-            wb = Workbook()
-            ws = wb.active
-            ws['A1'] = 'Durum'
-            ws['A2'] = 'Analiz sonucu bulunamadı'
-            wb.save(filepath)
+            empty_df = pd.DataFrame({'Durum': ['Analiz sonucu bulunamadı']})
+            empty_df.to_excel(filepath, index=False)
             
     except Exception as e:
         print(f"Analiz hatası: {e}")
-        # Hata Excel'i oluştur
-        wb = Workbook()
-        ws = wb.active
-        ws['A1'] = 'Hata'
-        ws['A2'] = f'Analiz sırasında hata: {str(e)}'
-        wb.save(filepath)
+        error_df = pd.DataFrame({'Hata': [f'Analiz sırasında hata: {str(e)}']})
+        error_df.to_excel(filepath, index=False)
 
 @app.route('/download/<file_id>')
 def download_file(file_id):
@@ -113,4 +88,5 @@ def check_status(file_id):
         return jsonify({'ready': False})
 
 if __name__ == '__main__':
-    app.run(debug=False, host='0.0.0.0', port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=False, host='0.0.0.0', port=port)
