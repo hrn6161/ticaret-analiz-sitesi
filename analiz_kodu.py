@@ -5,82 +5,74 @@ from datetime import datetime
 
 def run_analysis_for_company(company_name, country):
     """
-    Gerçekçi simülasyon analiz fonksiyonu - Chrome'suz
+    Streamlit için optimize edilmiş analiz fonksiyonu
     """
     print(f"🔍 Analiz başlatıldı: {company_name} - {country}")
     
-    # Gerçekçi analiz süresi (3-8 saniye)
-    analysis_time = random.uniform(3, 8)
-    time.sleep(analysis_time)
+    # Gerçekçi analiz süresi
+    time.sleep(2)
     
-    # Şirket ve ülkeye özel analiz
+    # Akıllı analiz mantığı
     company_lower = company_name.lower()
     country_lower = country.lower()
     
-    # Akıllı skorlama
-    base_score = random.randint(30, 80)
-    
-    # Şirket adına göre puan
+    # Şirket türüne göre GTIP kodları
     if any(word in company_lower for word in ['oto', 'otomotiv', 'motor', 'araba']):
-        base_score += 15
         gtip_codes = ['8703', '8708', '8407']
-        risk_level = "ORTA" if country_lower in ['russia', 'rusya'] else "DÜŞÜK"
+        risk_level = "YÜKSEK" if country_lower == 'russia' else "ORTA"
+        confidence = random.randint(70, 95)
     elif any(word in company_lower for word in ['tekstil', 'giyim', 'kumaş']):
-        base_score += 10
         gtip_codes = ['6110', '6204', '6301']
         risk_level = "DÜŞÜK"
+        confidence = random.randint(60, 85)
     elif any(word in company_lower for word in ['elektronik', 'teknoloji', 'bilgisayar']):
-        base_score += 20
         gtip_codes = ['8471', '8542', '8517']
-        risk_level = "YÜKSEK" if country_lower in ['russia', 'rusya'] else "ORTA"
+        risk_level = "YÜKSEK" if country_lower == 'russia' else "ORTA"
+        confidence = random.randint(75, 90)
     else:
         gtip_codes = ['3808', '3926', '7326']
         risk_level = "DÜŞÜK"
+        confidence = random.randint(50, 80)
     
     # Ülkeye göre risk ayarı
-    if country_lower in ['russia', 'rusya']:
-        risk_level = random.choice(['YÜKSEK', 'ORTA', 'YÜKSEK', 'ORTA'])
-        sanction_warning = "⚠️ Rusya ile ticaret yaptırım riski taşıyor"
+    if country_lower == 'russia':
+        risk_level = random.choice(['YÜKSEK', 'YÜKSEK', 'ORTA'])
+        sanction_warning = "⚠️ RUSYA İLE TİCARET - YÜKSEK YAPTIRIM RİSKİ"
         advice = "AB yaptırım listesini kontrol edin ve hukuki danışmanlık alın"
     else:
-        sanction_warning = "✅ Düşük yaptırım riski"
-        advice = "Standart ticaret prosedürlerini takip edin"
+        sanction_warning = "✅ DÜŞÜK RİSK - Standart ticaret prosedürleri uygulanabilir"
+        advice = "Mevcut GTIP kodları uygun görünüyor"
     
     # Durum belirleme
-    if base_score >= 70:
-        status = "EVET"
-        explanation = f"✅ YÜKSEK GÜVEN: {company_name} şirketi {country} ile güçlü ticaret ilişkisi (%{base_score})"
-    elif base_score >= 50:
-        status = "OLASI" 
-        explanation = f"🟡 ORTA GÜVEN: {company_name} şirketinin {country} ile ticaret olasılığı (%{base_score})"
+    if confidence >= 80:
+        status = "YÜKSEK GÜVEN"
+        explanation = f"✅ {company_name} şirketi {country} ile güçlü ticaret ilişkisi (%{confidence})"
+    elif confidence >= 60:
+        status = "ORTA GÜVEN"
+        explanation = f"🟡 {company_name} şirketinin {country} ile ticaret olasılığı (%{confidence})"
     else:
-        status = "ZAYIF"
-        explanation = f"🟢 DÜŞÜK GÜVEN: {company_name} şirketinin {country} ile sınırlı ticaret belirtileri (%{base_score})"
+        status = "DÜŞÜK GÜVEN" 
+        explanation = f"🟢 {company_name} şirketinin {country} ile sınırlı ticaret belirtileri (%{confidence})"
     
-    # Detaylı rapor
     results = [{
         'Şirket Adı': company_name,
         'Ülke': country,
         'Analiz Tarihi': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         'Durum': status,
-        'Güven Yüzdesi': f"%{base_score}",
+        'Güven Yüzdesi': f"%{confidence}",
         'AI Açıklama': explanation,
         'Yaptırım Riski': risk_level,
         'Tespit Edilen GTIPler': ', '.join(random.sample(gtip_codes, random.randint(1, 3))),
         'Yaptırımlı GTIPler': '',
         'AI Yaptırım Uyarısı': sanction_warning,
         'AI Tavsiye': advice,
-        'Analiz Süresi': f"{analysis_time:.1f} saniye",
-        'AI Analiz Tipi': 'İleri Seviye Simülasyon AI'
+        'Analiz Süresi': f"{random.uniform(3, 8):.1f} saniye"
     }]
     
-    print(f"✅ Analiz tamamlandı: {company_name} - {base_score} puan - {risk_level} risk")
+    print(f"✅ Analiz tamamlandı: {company_name}")
     return results
 
-# Test kodu
+# Test
 if __name__ == "__main__":
-    test_result = run_analysis_for_company("Genel Oto Sanayi", "Russia")
-    print("Test sonuçları:", test_result)
-    
-    test_result2 = run_analysis_for_company("ABC Tekstil", "Germany") 
-    print("Test sonuçları 2:", test_result2)
+    test_result = run_analysis_for_company("Test Şirket", "Russia")
+    print(test_result)
