@@ -2,7 +2,8 @@ from flask import Flask, render_template, request, send_file, jsonify
 import threading
 import os
 import time
-from analiz_kodu import run_analysis_for_company, create_advanced_excel_report
+from analiz_kodu import run_fast_analysis_for_company, create_advanced_excel_report
+import pandas as pd
 
 app = Flask(__name__)
 
@@ -36,7 +37,7 @@ def analyze():
         
         return jsonify({
             'success': True,
-            'message': f'{company_name} şirketi için GERÇEK ZAMANLI AI analiz başlatıldı. Bu işlem 5-10 dakika sürebilir.',
+            'message': f'{company_name} şirketi için HIZLI AI analiz başlatıldı. Bu işlem 2-3 dakika sürecek.',
             'file_id': filename
         })
         
@@ -45,24 +46,23 @@ def analyze():
 
 def run_analysis_in_thread(company_name, country, filepath):
     try:
-        print(f"🎯 GERÇEK ZAMANLI ANALİZ BAŞLATILDI: {company_name} - {country}")
-        results = run_analysis_for_company(company_name, country)
+        print(f"🎯 HIZLI ANALİZ BAŞLATILDI: {company_name} - {country}")
+        results = run_fast_analysis_for_company(company_name, country)
         
         if results and len(results) > 0:
-            create_advanced_excel_report(results, filepath)
-            print(f"✅ GERÇEK ANALİZ TAMAMLANDI: {filepath}")
+            df_results = pd.DataFrame(results)
+            create_advanced_excel_report(df_results, filepath)
+            print(f"✅ HIZLI ANALİZ TAMAMLANDI: {filepath}")
         else:
-            # Boş sonuç için Excel oluştur
             empty_results = [{
                 'ŞİRKET': company_name,
                 'ÜLKE': country,
                 'DURUM': 'SONUÇ_BULUNAMADI',
-                'AI_AÇIKLAMA': 'Gerçek zamanlı analiz sonuç bulamadı',
-                'YAPTIRIM_RISKI': 'BELİRSİZ',
-                'GÜVEN_YÜZDESİ': 0,
-                'TARİH': time.strftime('%Y-%m-%d %H:%M')
+                'AI_AÇIKLAMA': 'Hızlı analiz sonuç bulamadı',
+                'YAPTIRIM_RISKI': 'BELİRSİZ'
             }]
-            create_advanced_excel_report(empty_results, filepath)
+            df_empty = pd.DataFrame(empty_results)
+            create_advanced_excel_report(df_empty, filepath)
             
     except Exception as e:
         print(f"Analiz hatası: {e}")
@@ -71,11 +71,10 @@ def run_analysis_in_thread(company_name, country, filepath):
             'ÜLKE': country,
             'DURUM': 'HATA',
             'AI_AÇIKLAMA': f'Analiz sırasında hata: {str(e)}',
-            'YAPTIRIM_RISKI': 'BELİRSİZ',
-            'GÜVEN_YÜZDESİ': 0,
-            'TARİH': time.strftime('%Y-%m-%d %H:%M')
+            'YAPTIRIM_RISKI': 'BELİRSİZ'
         }]
-        create_advanced_excel_report(error_results, filepath)
+        df_error = pd.DataFrame(error_results)
+        create_advanced_excel_report(df_error, filepath)
 
 @app.route('/download/<file_id>')
 def download_file(file_id):
