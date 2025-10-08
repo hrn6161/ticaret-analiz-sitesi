@@ -1,4 +1,3 @@
-import pandas as pd
 import time
 import random
 import re
@@ -14,6 +13,8 @@ from selenium.webdriver.support import expected_conditions as EC
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment
 
 print("🚀 GERÇEK ZEKA YAPTIRIM ANALİZ SİSTEMİ BAŞLATILIYOR...")
 
@@ -30,15 +31,6 @@ def setup_driver():
         chrome_options.add_argument('--window-size=1920,1080')
         chrome_options.add_argument('--disable-extensions')
         chrome_options.add_argument('--disable-images')
-        chrome_options.add_argument('--blink-settings=imagesEnabled=false')
-        
-        # Performans optimizasyonları
-        chrome_options.add_argument('--no-first-run')
-        chrome_options.add_argument('--no-default-browser-check')
-        chrome_options.add_argument('--disable-background-timer-throttling')
-        
-        # User-agent
-        chrome_options.add_argument('--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
         
         # WebDriver Manager ile otomatik ChromeDriver kur
         service = Service(ChromeDriverManager().install())
@@ -53,21 +45,58 @@ def setup_driver():
         
     except Exception as e:
         print(f"❌ ChromeDriver hatası: {e}")
-        print("🔄 Alternatif yöntem deneniyor...")
+        return None
+
+def create_excel_file(results, filepath):
+    """Excel dosyası oluştur (pandas olmadan)"""
+    try:
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Ticaret Analiz Sonuçları"
         
-        try:
-            # Alternatif: Sadece headless mod
-            chrome_options = Options()
-            chrome_options.add_argument('--headless')
-            chrome_options.add_argument('--no-sandbox')
-            chrome_options.add_argument('--disable-dev-shm-usage')
-            
-            driver = webdriver.Chrome(options=chrome_options)
-            print("✅ Alternatif ChromeDriver başlatıldı")
-            return driver
-        except Exception as e2:
-            print(f"❌ Alternatif driver da başarısız: {e2}")
-            return None
+        # Başlıklar
+        headers = [
+            'Şirket Adı', 'Ülke', 'Analiz Tarihi', 'Durum', 
+            'Güven Yüzdesi', 'AI Açıklama', 'Yaptırım Riski',
+            'Tespit Edilen GTIPler', 'Yaptırımlı GTIPler',
+            'AI Yaptırım Uyarısı', 'AI Tavsiye', 'Kaynak URL'
+        ]
+        
+        # Başlıkları yaz
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+            cell.alignment = Alignment(horizontal="center")
+        
+        # Verileri yaz
+        for row, result in enumerate(results, 2):
+            ws.cell(row=row, column=1, value=result.get('Şirket Adı', ''))
+            ws.cell(row=row, column=2, value=result.get('Ülke', ''))
+            ws.cell(row=row, column=3, value=result.get('Analiz Tarihi', ''))
+            ws.cell(row=row, column=4, value=result.get('Durum', ''))
+            ws.cell(row=row, column=5, value=result.get('Güven Yüzdesi', ''))
+            ws.cell(row=row, column=6, value=result.get('AI Açıklama', ''))
+            ws.cell(row=row, column=7, value=result.get('Yaptırım Riski', ''))
+            ws.cell(row=row, column=8, value=result.get('Tespit Edilen GTIPler', ''))
+            ws.cell(row=row, column=9, value=result.get('Yaptırımlı GTIPler', ''))
+            ws.cell(row=row, column=10, value=result.get('AI Yaptırım Uyarısı', ''))
+            ws.cell(row=row, column=11, value=result.get('AI Tavsiye', ''))
+            ws.cell(row=row, column=12, value=result.get('Kaynak URL', ''))
+        
+        # Sütun genişliklerini ayarla
+        column_widths = [20, 15, 20, 15, 15, 50, 15, 20, 20, 50, 30, 30]
+        for col, width in enumerate(column_widths, 1):
+            ws.column_dimensions[chr(64 + col)].width = width
+        
+        # Dosyayı kaydet
+        wb.save(filepath)
+        print(f"✅ Excel dosyası oluşturuldu: {filepath}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Excel dosyası oluşturma hatası: {e}")
+        return False
 
 def run_analysis_for_company(company_name, country):
     """
@@ -82,8 +111,13 @@ def run_analysis_for_company(company_name, country):
             'Ülke': country,
             'Analiz Tarihi': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'Durum': 'HATA',
+            'Güven Yüzdesi': '%0',
             'AI Açıklama': 'ChromeDriver başlatılamadı',
-            'Yaptırım Riski': 'BELİRSİZ'
+            'Yaptırım Riski': 'BELİRSİZ',
+            'Tespit Edilen GTIPler': '',
+            'Yaptırımlı GTIPler': '',
+            'AI Yaptırım Uyarısı': 'Sistem hatası',
+            'AI Tavsiye': 'Tekrar deneyin'
         }]
     
     try:
@@ -94,7 +128,6 @@ def run_analysis_for_company(company_name, country):
         # DuckDuckGo ile arama (daha az bloklanan)
         search_urls = [
             ("https://duckduckgo.com", "q"),
-            ("https://www.bing.com", "q"),
             ("https://html.duckduckgo.com/html", "q")
         ]
         
@@ -123,19 +156,12 @@ def run_analysis_for_company(company_name, country):
                         time.sleep(4)
                         
                         # Sonuçları al
-                        if "duckduckgo" in search_url:
-                            results = driver.find_elements(By.CSS_SELECTOR, "div.result")
-                        else:
-                            results = driver.find_elements(By.CSS_SELECTOR, "li.b_algo, div.g")
+                        results = driver.find_elements(By.CSS_SELECTOR, "div.result, li.b_algo, div.g")
                         
                         if results:
                             result = results[0]
                             try:
-                                if "duckduckgo" in search_url:
-                                    link = result.find_element(By.CSS_SELECTOR, "a.result__a")
-                                else:
-                                    link = result.find_element(By.CSS_SELECTOR, "h2 a, h3 a")
-                                
+                                link = result.find_element(By.CSS_SELECTOR, "a")
                                 url = link.get_attribute("href")
                                 title = link.text
                                 
@@ -165,8 +191,7 @@ def run_analysis_for_company(company_name, country):
                                     'Yaptırımlı GTIPler': analysis_result['YAPTIRIMLI_GTIPLER'],
                                     'AI Yaptırım Uyarısı': analysis_result['AI_YAPTIRIM_UYARI'],
                                     'AI Tavsiye': analysis_result['AI_TAVSIYE'],
-                                    'Kaynak URL': url,
-                                    'Arama Motoru': search_url
+                                    'Kaynak URL': url
                                 }
                                 
                                 all_results.append(result_data)
@@ -206,8 +231,13 @@ def run_analysis_for_company(company_name, country):
             'Ülke': country,
             'Analiz Tarihi': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'Durum': 'HATA',
+            'Güven Yüzdesi': '%0',
             'AI Açıklama': f'Analiz sırasında hata: {str(e)}',
-            'Yaptırım Riski': 'BELİRSİZ'
+            'Yaptırım Riski': 'BELİRSİZ',
+            'Tespit Edilen GTIPler': '',
+            'Yaptırımlı GTIPler': '',
+            'AI Yaptırım Uyarısı': 'Sistem hatası',
+            'AI Tavsiye': 'Tekrar deneyin'
         }]
     finally:
         if driver:
