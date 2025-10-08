@@ -16,40 +16,42 @@ from openpyxl.styles import Font, PatternFill, Alignment
 print("🚀 GERÇEK ZAMANLI YAPAY ZEKA YAPTIRIM ANALİZ SİSTEMİ BAŞLATILIYOR...")
 
 def setup_driver():
-    """Multiple Remote ChromeDriver denemesi"""
-    chrome_options = Options()
-    chrome_options.add_argument('--no-sandbox')
-    chrome_options.add_argument('--disable-dev-shm-usage')
-    chrome_options.add_argument('--headless')
-    chrome_options.add_argument('--disable-gpu')
-    chrome_options.add_argument('--window-size=1920,1080')
-    chrome_options.add_argument('--disable-extensions')
-    
-    # Farklı remote Chrome servisleri
-    remote_services = [
-        # 1. Browserless.io (ücretsiz)
-        "https://chrome.browserless.io/webdriver",
-        # 2. Selenium Grid (public)
-        "http://selenium-hub:4444/wd/hub",
-        # 3. LambdaTest (ücretsiz kayıt gerekir)
-        # "https://username:accesskey@hub.lambdatest.com/wd/hub"
-    ]
-    
-    for service_url in remote_services:
-        try:
-            print(f"🔄 Deneniyor: {service_url}")
-            driver = webdriver.Remote(
-                command_executor=service_url,
-                options=chrome_options
-            )
-            print(f"✅ Başarılı: {service_url}")
-            return driver
-        except Exception as e:
-            print(f"❌ Başarısız: {service_url} - {e}")
-            continue
-    
-    print("❌ Tüm remote servisler başarısız")
-    return None
+    """LambdaTest ile remote ChromeDriver"""
+    try:
+        # LAMBDATEST CREDENTIALS - BUNLARI KENDİ BİLGİLERİNLE GÜNCELLE!
+        LT_USERNAME = "hbirinci6134"
+        LT_ACCESS_KEY = "LT_LflLMI9q0A3q79YpnwuBGqGiFOyYM0yhI1jEy7iNyCSFilh"
+        
+        if LT_ACCESS_KEY == "YOUR_ACCESS_KEY":
+            print("❌ LambdaTest access key güncellenmemiş")
+            return None
+            
+        capabilities = {
+            "browserName": "Chrome",
+            "browserVersion": "latest",
+            "LT:Options": {
+                "username": LT_USERNAME,
+                "accessKey": LT_ACCESS_KEY,
+                "platformName": "Windows 10",
+                "project": "Ticaret Analiz Sistemi",
+                "w3c": True,
+                "plugin": "python-python"
+            }
+        }
+        
+        remote_url = f"https://{LT_USERNAME}:{LT_ACCESS_KEY}@hub.lambdatest.com/wd/hub"
+        
+        driver = webdriver.Remote(
+            command_executor=remote_url,
+            desired_capabilities=capabilities
+        )
+        
+        print("✅ LambdaTest ChromeDriver başlatıldı")
+        return driver
+        
+    except Exception as e:
+        print(f"❌ LambdaTest hatası: {e}")
+        return None
 
 def create_excel_file(results, filepath):
     """Excel dosyası oluştur"""
@@ -102,21 +104,21 @@ def create_excel_file(results, filepath):
 
 def run_analysis_for_company(company_name, country):
     """
-    Ana analiz fonksiyonu - Gerçek web scraping
+    ORJİNAL KOD - LambdaTest ile gerçek web scraping
     """
     print(f"🔍 Analiz başlatıldı: {company_name} - {country}")
     
     driver = setup_driver()
     if not driver:
-        print("🔄 Remote Chrome başlatılamadı, gelişmiş simülasyon kullanılıyor...")
+        print("🔄 LambdaTest başlatılamadı, gelişmiş simülasyon kullanılıyor...")
         return [generate_advanced_simulation(company_name, country)]
     
     try:
-        print("       🌐 Gerçek web taraması başlatılıyor...")
+        print("       🌐 GERÇEK web taraması başlatılıyor...")
         
         all_results = []
         
-        # DuckDuckGo ile arama (daha az bloklanan)
+        # DuckDuckGo ile arama
         search_url = "https://html.duckduckgo.com/html"
         
         try:
@@ -185,7 +187,7 @@ def run_analysis_for_company(company_name, country):
                             driver.close()
                             driver.switch_to.window(driver.window_handles[0])
                             
-                            print("       ✅ Gerçek web tarama başarılı!")
+                            print("       ✅ GERÇEK web tarama başarılı!")
                             break
                             
                         except Exception as e:
@@ -200,7 +202,7 @@ def run_analysis_for_company(company_name, country):
             print(f"       ⚠️ Arama motoru hatası: {e}")
         
         if all_results:
-            print(f"✅ Gerçek analiz tamamlandı: {company_name} - {len(all_results)} sonuç")
+            print(f"✅ GERÇEK analiz tamamlandı: {company_name} - {len(all_results)} sonuç")
             return all_results
         else:
             print("🔄 Web tarama sonuçsuz, gelişmiş simülasyon kullanılıyor...")
