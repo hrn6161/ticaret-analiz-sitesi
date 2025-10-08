@@ -1,4 +1,3 @@
-import pandas as pd
 import time
 import random
 import re
@@ -11,11 +10,13 @@ from selenium.webdriver.chrome.service import Service
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment
 
 print("🚀 GERÇEK ZAMANLI YAPAY ZEKA YAPTIRIM ANALİZ SİSTEMİ BAŞLATILIYOR...")
 
 def setup_driver():
-    """Browserless.io ile remote ChromeDriver - KESİN ÇÖZÜM"""
+    """Browserless.io ile remote ChromeDriver"""
     try:
         chrome_options = Options()
         
@@ -27,7 +28,6 @@ def setup_driver():
         chrome_options.add_argument('--window-size=1920,1080')
         chrome_options.add_argument('--disable-extensions')
         chrome_options.add_argument('--disable-images')
-        chrome_options.add_argument('--blink-settings=imagesEnabled=false')
         
         # Browserless API (ücretsiz)
         browserless_url = "https://chrome.browserless.io/webdriver"
@@ -43,28 +43,61 @@ def setup_driver():
         
     except Exception as e:
         print(f"❌ Browserless hatası: {e}")
+        return None
+
+def create_excel_file(results, filepath):
+    """Excel dosyası oluştur (pandas olmadan)"""
+    try:
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Ticaret Analiz Sonuçları"
         
-        # Fallback: Selenium Grid
-        try:
-            chrome_options = Options()
-            chrome_options.add_argument('--headless')
-            chrome_options.add_argument('--no-sandbox')
-            chrome_options.add_argument('--disable-dev-shm-usage')
-            
-            # Alternatif Selenium Grid
-            driver = webdriver.Remote(
-                command_executor='http://selenium-hub:4444/wd/hub',
-                options=chrome_options
-            )
-            print("✅ Selenium Grid ChromeDriver başlatıldı")
-            return driver
-        except Exception as e2:
-            print(f"❌ Selenium Grid hatası: {e2}")
-            return None
+        # Başlıklar
+        headers = [
+            'Şirket Adı', 'Ülke', 'Analiz Tarihi', 'Durum', 
+            'Güven Yüzdesi', 'AI Açıklama', 'Yaptırım Riski',
+            'Tespit Edilen GTIPler', 'Yaptırımlı GTIPler',
+            'AI Yaptırım Uyarısı', 'AI Tavsiye', 'Kaynak URL'
+        ]
+        
+        # Başlıkları yaz
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+            cell.alignment = Alignment(horizontal="center")
+        
+        # Verileri yaz
+        for row, result in enumerate(results, 2):
+            ws.cell(row=row, column=1, value=result.get('Şirket Adı', ''))
+            ws.cell(row=row, column=2, value=result.get('Ülke', ''))
+            ws.cell(row=row, column=3, value=result.get('Analiz Tarihi', ''))
+            ws.cell(row=row, column=4, value=result.get('Durum', ''))
+            ws.cell(row=row, column=5, value=result.get('Güven Yüzdesi', ''))
+            ws.cell(row=row, column=6, value=result.get('AI Açıklama', ''))
+            ws.cell(row=row, column=7, value=result.get('Yaptırım Riski', ''))
+            ws.cell(row=row, column=8, value=result.get('Tespit Edilen GTIPler', ''))
+            ws.cell(row=row, column=9, value=result.get('Yaptırımlı GTIPler', ''))
+            ws.cell(row=row, column=10, value=result.get('AI Yaptırım Uyarısı', ''))
+            ws.cell(row=row, column=11, value=result.get('AI Tavsiye', ''))
+            ws.cell(row=row, column=12, value=result.get('Kaynak URL', ''))
+        
+        # Sütun genişliklerini ayarla
+        column_widths = [20, 15, 20, 15, 15, 50, 15, 20, 20, 50, 30, 30]
+        for col, width in enumerate(column_widths, 1):
+            ws.column_dimensions[chr(64 + col)].width = width
+        
+        wb.save(filepath)
+        print(f"✅ Excel dosyası oluşturuldu: {filepath}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Excel dosyası oluşturma hatası: {e}")
+        return False
 
 def run_analysis_for_company(company_name, country):
     """
-    ORJİNAL KODUN AYNISI - Sadece driver setup değişti
+    ORJİNAL KOD - Sadece driver setup değişti
     """
     print(f"🔍 Analiz başlatıldı: {company_name} - {country}")
     
@@ -75,8 +108,13 @@ def run_analysis_for_company(company_name, country):
             'Ülke': country,
             'Analiz Tarihi': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'Durum': 'HATA',
+            'Güven Yüzdesi': '%0',
             'AI Açıklama': 'ChromeDriver başlatılamadı',
-            'Yaptırım Riski': 'BELİRSİZ'
+            'Yaptırım Riski': 'BELİRSİZ',
+            'Tespit Edilen GTIPler': '',
+            'Yaptırımlı GTIPler': '',
+            'AI Yaptırım Uyarısı': 'Sistem hatası',
+            'AI Tavsiye': 'Tekrar deneyin'
         }]
     
     try:
@@ -179,7 +217,11 @@ def run_analysis_for_company(company_name, country):
             'Analiz Tarihi': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'Durum': 'HATA',
             'AI Açıklama': f'Analiz sırasında hata: {str(e)}',
-            'Yaptırım Riski': 'BELİRSİZ'
+            'Yaptırım Riski': 'BELİRSİZ',
+            'Tespit Edilen GTIPler': '',
+            'Yaptırımlı GTIPler': '',
+            'AI Yaptırım Uyarısı': 'Sistem hatası',
+            'AI Tavsiye': 'Tekrar deneyin'
         }]
     finally:
         if driver:
