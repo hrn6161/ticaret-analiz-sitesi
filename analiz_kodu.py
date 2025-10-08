@@ -6,12 +6,10 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
 import requests
 from bs4 import BeautifulSoup
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
-import matplotlib.pyplot as plt
 import io
 from datetime import datetime
 
@@ -44,7 +42,7 @@ class RealTimeSanctionAnalyzer:
             print("       🌐 AB Yaptırım Listesi kontrol ediliyor...")
             
             driver.get(self.eu_sanction_url)
-            time.sleep(5)
+            time.sleep(3)
             
             page_content = driver.find_element(By.TAG_NAME, "body").text
             page_html = driver.page_source
@@ -74,7 +72,7 @@ class RealTimeSanctionAnalyzer:
                     code_pattern = r'\b' + re.escape(gtip_code) + r'\b'
                     code_matches = list(re.finditer(code_pattern, full_text))
                     
-                    for match in code_matches[:5]:
+                    for match in code_matches[:3]:
                         start_pos = max(0, match.start() - 200)
                         end_pos = min(len(full_text), match.end() + 200)
                         context = full_text[start_pos:end_pos].lower()
@@ -114,6 +112,7 @@ class RealTimeSanctionAnalyzer:
             
         except Exception as e:
             print(f"       ❌ AB yaptırım kontrol hatası: {e}")
+            # Fallback: Önceden tanımlı yaptırım listesi
             predefined_sanctions = ['8703', '8708', '8407', '8471', '8542', '8802', '9306']
             for code in gtip_codes:
                 if code in predefined_sanctions:
@@ -171,8 +170,7 @@ class AdvancedAIAnalyzer:
                 'export': 15, 'import': 15, 'trade': 12, 'trading': 10,
                 'business': 10, 'partner': 12, 'market': 10, 'distributor': 15,
                 'supplier': 12, 'dealer': 10, 'agent': 8, 'cooperation': 10,
-                'collaboration': 8, 'shipment': 10, 'logistics': 8, 'customs': 8,
-                'foreign': 6, 'international': 8, 'overseas': 6, 'global': 6
+                'collaboration': 8, 'shipment': 10, 'logistics': 8, 'customs': 8
             }
             
             for term, points in trade_indicators.items():
@@ -184,8 +182,7 @@ class AdvancedAIAnalyzer:
             product_keywords = {
                 'automotive': '8703', 'vehicle': '8703', 'car': '8703', 'motor': '8407',
                 'engine': '8407', 'parts': '8708', 'component': '8708', 
-                'computer': '8471', 'electronic': '8542', 'aircraft': '8802',
-                'weapon': '9306', 'chemical': '2844', 'signal': '8517'
+                'computer': '8471', 'electronic': '8542', 'aircraft': '8802'
             }
             
             for product, gtip in product_keywords.items():
@@ -205,7 +202,7 @@ class AdvancedAIAnalyzer:
             
             context_matches = 0
             for phrase in context_phrases:
-                if phrase in text_lower.replace(" ", ""):
+                if re.search(phrase, text_lower.replace(" ", "")):
                     context_matches += 1
                     reasons.append(f"Bağlam eşleşmesi: {phrase}")
             
@@ -226,10 +223,10 @@ class AdvancedAIAnalyzer:
             
             sanctions_result = self.analyze_sanctions_risk(company, country, gtip_codes, sanctioned_codes, sanction_analysis)
             
-            max_possible = 218
-            percentage = (score / max_possible) * 100
+            max_possible = 200
+            percentage = (score / max_possible) * 100 if max_possible > 0 else 0
             
-            # YENİ: Yaptırım durumuna göre final durumu belirle - GÜNCELLENDİ
+            # Yaptırım durumuna göre final durumu belirle
             if sanctions_result['YAPTIRIM_RISKI'] == 'YAPTIRIMLI_YÜKSEK_RISK':
                 status = "YAPTIRIMLI_YÜKSEK_RISK"
                 explanation = f"⛔ YÜKSEK YAPTIRIM RİSKİ: {company} şirketi {country} ile yaptırımlı ürün ticareti yapıyor (%{percentage:.1f})"
@@ -300,7 +297,7 @@ class AdvancedAIAnalyzer:
             }
     
     def analyze_sanctions_risk(self, company, country, gtip_codes, sanctioned_codes, sanction_analysis):
-        """Gelişmiş yaptırım risk analizi - GÜNCELLENDİ"""
+        """Gelişmiş yaptırım risk analizi"""
         analysis_result = {
             'YAPTIRIM_RISKI': 'DÜŞÜK',
             'YAPTIRIMLI_GTIPLER': [],
@@ -314,7 +311,6 @@ class AdvancedAIAnalyzer:
             analysis_result['AB_LISTESINDE_BULUNDU'] = 'EVET'
             
             if sanctioned_codes:
-                # YENİ: Risk seviyesine göre sınıflandırma
                 high_risk_codes = []
                 medium_risk_codes = []
                 
@@ -328,26 +324,12 @@ class AdvancedAIAnalyzer:
                 if high_risk_codes:
                     analysis_result['YAPTIRIM_RISKI'] = 'YAPTIRIMLI_YÜKSEK_RISK'
                     analysis_result['YAPTIRIMLI_GTIPLER'] = high_risk_codes
-                    
-                    details = []
-                    for code in high_risk_codes:
-                        if code in sanction_analysis:
-                            details.append(f"{code}: {sanction_analysis[code]['reason']}")
-                    
-                    analysis_result['GTIP_ANALIZ_DETAY'] = ' | '.join(details)
                     analysis_result['AI_YAPTIRIM_UYARI'] = f'⛔ YÜKSEK YAPTIRIM RİSKİ: {company} şirketi {country} ile YASAKLI GTIP kodlarında ticaret yapıyor: {", ".join(high_risk_codes)}'
                     analysis_result['AI_TAVSIYE'] = f'⛔ BU ÜRÜNLERİN RUSYA\'YA İHRACI KESİNLİKLE YASAKTIR! GTIP: {", ".join(high_risk_codes)}. Acilen hukuki danışmanlık alın.'
                 
                 elif medium_risk_codes:
                     analysis_result['YAPTIRIM_RISKI'] = 'YAPTIRIMLI_ORTA_RISK'
                     analysis_result['YAPTIRIMLI_GTIPLER'] = medium_risk_codes
-                    
-                    details = []
-                    for code in medium_risk_codes:
-                        if code in sanction_analysis:
-                            details.append(f"{code}: {sanction_analysis[code]['reason']}")
-                    
-                    analysis_result['GTIP_ANALIZ_DETAY'] = ' | '.join(details)
                     analysis_result['AI_YAPTIRIM_UYARI'] = f'🟡 ORTA YAPTIRIM RİSKİ: {company} şirketi {country} ile kısıtlamalı GTIP kodlarında ticaret yapıyor: {", ".join(medium_risk_codes)}'
                     analysis_result['AI_TAVSIYE'] = f'🟡 Bu GTIP kodları kısıtlamalı olabilir: {", ".join(medium_risk_codes)}. Resmi makamlardan teyit alınması önerilir.'
             
@@ -369,11 +351,8 @@ def ai_enhanced_search(driver, company, country):
     
     search_terms = [
         f"{company} {country} export",
-        f"{company} {country} import", 
         f"{company} {country} trade",
-        f"{company} {country} business",
-        f"{company} {country} GTIP",
-        f"{company} {country} HS code"
+        f"{company} {country} business"
     ]
     
     for term in search_terms:
@@ -387,9 +366,9 @@ def ai_enhanced_search(driver, company, country):
             search_box.clear()
             search_box.send_keys(term)
             search_box.send_keys(Keys.RETURN)
-            time.sleep(4)
+            time.sleep(3)
             
-            for page_num in range(1, 4):
+            for page_num in range(1, 3):
                 try:
                     print(f"     📄 {page_num}. sayfa AI analizi...")
                     
@@ -407,7 +386,7 @@ def ai_enhanced_search(driver, company, country):
                         
                         print(f"       🌐 Sayfa yükleniyor: {title[:40]}...")
                         driver.get(url)
-                        time.sleep(3)
+                        time.sleep(2)
                         
                         page_content = driver.find_element(By.TAG_NAME, "body").text
                         page_title = driver.title
@@ -446,7 +425,6 @@ def ai_enhanced_search(driver, company, country):
                         
                         all_results.append(result_data)
                         
-                        # YENİ: Güncellenmiş renk kodları
                         status_color = {
                             'YAPTIRIMLI_YÜKSEK_RISK': '⛔',
                             'YAPTIRIMLI_ORTA_RISK': '🟡',
@@ -473,7 +451,7 @@ def ai_enhanced_search(driver, company, country):
                     print(f"       ❌ {page_num}. sayfa AI analiz hatası: {e}")
                     continue
             
-            time.sleep(8)
+            time.sleep(5)
             
         except Exception as e:
             print(f"   ❌ Arama hatası: {e}")
@@ -482,141 +460,42 @@ def ai_enhanced_search(driver, company, country):
     return all_results
 
 def create_advanced_excel_report(df_results, filename='ai_ticaret_analiz_sonuc.xlsx'):
-    """Gelişmiş Excel raporu oluştur - AI YORUMU EKLENDİ"""
+    """Gelişmiş Excel raporu oluştur"""
     
-    with pd.ExcelWriter(filename, engine='openpyxl') as writer:
-        workbook = writer.book
+    try:
+        with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+            workbook = writer.book
+            
+            # 1. Tüm AI Sonuçları
+            df_results.to_excel(writer, sheet_name='AI Analiz Sonuçları', index=False)
+            
+            # 2. Yüksek Riskli Sonuçlar
+            high_risk = df_results[df_results['YAPTIRIM_RISKI'].isin(['YAPTIRIMLI_YÜKSEK_RISK', 'YAPTIRIMLI_ORTA_RISK'])]
+            if not high_risk.empty:
+                high_risk.to_excel(writer, sheet_name='Yüksek Riskli', index=False)
+            
+            # 3. Yüksek Güvenilir Sonuçlar
+            high_confidence = df_results[df_results['GÜVEN_YÜZDESİ'] >= 60]
+            if not high_confidence.empty:
+                high_confidence.to_excel(writer, sheet_name='Yüksek Güvenilir', index=False)
+            
+            # 4. Detaylı Analiz
+            analysis_details = df_results[['ŞİRKET', 'ÜLKE', 'DURUM', 'GÜVEN_YÜZDESİ', 
+                                         'YAPTIRIM_RISKI', 'TESPIT_EDILEN_GTIPLER', 
+                                         'YAPTIRIMLI_GTIPLER', 'AI_YAPTIRIM_UYARI', 
+                                         'AI_TAVSIYE', 'URL']]
+            analysis_details.to_excel(writer, sheet_name='Detaylı Analiz', index=False)
         
-        # 1. Tüm AI Sonuçları
-        df_results.to_excel(writer, sheet_name='AI Analiz Sonuçları', index=False)
+        print(f"✅ Gelişmiş Excel raporu oluşturuldu: {filename}")
+        return True
         
-        # 2. Yüksek Riskli Sonuçlar
-        high_risk = df_results[df_results['YAPTIRIM_RISKI'].isin(['YAPTIRIMLI_YÜKSEK_RISK', 'YAPTIRIMLI_ORTA_RISK'])]
-        high_risk.to_excel(writer, sheet_name='Yüksek Riskli', index=False)
-        
-        # 3. Yüksek Güvenilir Sonuçlar
-        high_confidence = df_results[df_results['GÜVEN_YÜZDESİ'] >= 60]
-        high_confidence.to_excel(writer, sheet_name='Yüksek Güvenilir', index=False)
-        
-        # 4. AI Özet Tablosu
-        ai_summary = df_results.groupby(['ŞİRKET', 'ÜLKE', 'DURUM', 'YAPTIRIM_RISKI']).agg({
-            'GÜVEN_YÜZDESİ': ['count', 'mean', 'max'],
-            'HAM_PUAN': 'mean',
-        }).round(1)
-        ai_summary.columns = ['_'.join(col).strip() for col in ai_summary.columns.values]
-        ai_summary = ai_summary.reset_index()
-        ai_summary.to_excel(writer, sheet_name='AI Özeti', index=False)
-        
-        # 5. Detaylı Analiz
-        analysis_details = df_results[['ŞİRKET', 'ÜLKE', 'DURUM', 'GÜVEN_YÜZDESİ', 
-                                     'YAPTIRIM_RISKI', 'TESPIT_EDILEN_GTIPLER', 
-                                     'YAPTIRIMLI_GTIPLER', 'AI_YAPTIRIM_UYARI', 
-                                     'AI_TAVSIYE', 'URL']]
-        analysis_details.to_excel(writer, sheet_name='Detaylı Analiz', index=False)
-        
-        # 6. GTIP Yaptırım Analizi
-        gtip_analysis = df_results[df_results['TESPIT_EDILEN_GTIPLER'] != '']
-        if not gtip_analysis.empty:
-            gtip_summary = gtip_analysis.groupby('TESPIT_EDILEN_GTIPLER').agg({
-                'ŞİRKET': 'count',
-                'YAPTIRIM_RISKI': 'first',
-                'AI_YAPTIRIM_UYARI': 'first'
-            }).reset_index()
-            gtip_summary.to_excel(writer, sheet_name='GTIP Analiz', index=False)
-        
-        # 7. YENİ: AI YORUMU ve İSTATİSTİKLER SAYFASI
-        create_ai_comment_sheet(workbook, df_results)
-    
-    print(f"✅ Gelişmiş Excel raporu oluşturuldu: {filename}")
-    return filename
-
-def create_ai_comment_sheet(workbook, df_results):
-    """AI yorumu ve istatistikler sayfası oluştur"""
-    
-    sheet = workbook.create_sheet("🤖 AI Yorumu ve İstatistikler")
-    
-    # Başlık
-    sheet['A1'] = "🤖 YAPAY ZEKA TİCARET ANALİZ YORUMU"
-    sheet['A1'].font = Font(size=16, bold=True, color="FF0000")
-    
-    # Temel istatistikler
-    sheet['A3'] = "📊 TEMEL İSTATİSTİKLER"
-    sheet['A3'].font = Font(size=14, bold=True)
-    
-    stats_data = [
-        ("Toplam AI Analiz", len(df_results)),
-        ("Yüksek Güvenilir Sonuç", len(df_results[df_results['GÜVEN_YÜZDESİ'] >= 60])),
-        ("Yüksek Yaptırım Riski", len(df_results[df_results['YAPTIRIM_RISKI'] == 'YAPTIRIMLI_YÜKSEK_RISK'])),
-        ("Orta Yaptırım Riski", len(df_results[df_results['YAPTIRIM_RISKI'] == 'YAPTIRIMLI_ORTA_RISK'])),
-        ("Rusya ile Ticaret Oranı", f"%{(len(df_results[df_results['ÜLKE'].str.lower().isin(['russia', 'rusya'])])/len(df_results)*100):.1f}"),
-        ("Ortalama Güven Yüzdesi", f"%{df_results['GÜVEN_YÜZDESİ'].mean():.1f}")
-    ]
-    
-    for i, (label, value) in enumerate(stats_data, start=4):
-        sheet[f'A{i}'] = label
-        sheet[f'B{i}'] = value
-        sheet[f'A{i}'].font = Font(bold=True)
-    
-    # AI Yorumu
-    sheet['A10'] = "🎯 AI TİCARET ANALİZ YORUMU"
-    sheet['A10'].font = Font(size=14, bold=True, color="FF0000")
-    
-    # Detaylı yorum oluştur
-    total_analysis = len(df_results)
-    russia_count = len(df_results[df_results['ÜLKE'].str.lower().isin(['russia', 'rusya'])])
-    high_risk_count = len(df_results[df_results['YAPTIRIM_RISKI'] == 'YAPTIRIMLI_YÜKSEK_RISK'])
-    medium_risk_count = len(df_results[df_results['YAPTIRIM_RISKI'] == 'YAPTIRIMLI_ORTA_RISK'])
-    avg_confidence = df_results['GÜVEN_YÜZDESİ'].mean()
-    
-    # Riskli GTIP kodlarını bul
-    high_risk_gtips = df_results[df_results['YAPTIRIM_RISKI'] == 'YAPTIRIMLI_YÜKSEK_RISK']['YAPTIRIMLI_GTIPLER'].unique()
-    medium_risk_gtips = df_results[df_results['YAPTIRIM_RISKI'] == 'YAPTIRIMLI_ORTA_RISK']['YAPTIRIMLI_GTIPLER'].unique()
-    
-    ai_comment = f"""
-    📊 GENEL DURUM ANALİZİ:
-    • Toplam {total_analysis} AI analiz gerçekleştirilmiştir
-    • {russia_count} şirket Rusya ile ticaret potansiyeli göstermektedir
-    • Ortalama güven seviyesi: %{avg_confidence:.1f}
-    
-    ⚠️  YAPTIRIM RİSK ANALİZİ:
-    • {high_risk_count} şirket YÜKSEK yaptırım riski taşımaktadır
-    • {medium_risk_count} şirket ORTA yaptırım riski taşımaktadır
-    • Yüksek riskli GTIP kodları: {', '.join([gtip for gtips in high_risk_gtips for gtip in gtips.split(', ') if gtip]) if any(high_risk_gtips) else 'Yok'}
-    • Orta riskli GTIP kodları: {', '.join([gtip for gtips in medium_risk_gtips for gtip in gtips.split(', ') if gtip]) if any(medium_risk_gtips) else 'Yok'}
-    
-    🔴 KRİTİK UYARILAR:
-    {f'• ⛔ YÜKSEK RİSK: {high_risk_count} şirket yasaklı GTIP kodları ile ticaret yapıyor' if high_risk_count > 0 else '• ✅ Yüksek riskli şirket bulunamadı'}
-    {f'• 🟡 ORTA RİSK: {medium_risk_count} şirket kısıtlamalı GTIP kodları ile ticaret yapıyor' if medium_risk_count > 0 else '• ✅ Orta riskli şirket bulunamadı'}
-    
-    💡 TAVSİYELER VE SONRAKİ ADIMLAR:
-    1. Yüksek riskli şirketlerle acilen iletişime geçin
-    2. Yaptırım listesini düzenli olarak güncelleyin
-    3. GTIP kodlarını resmi makamlardan teyit edin
-    4. Hukuki danışmanlık almayı düşünün
-    
-    📈 PERFORMANS DEĞERLENDİRMESİ:
-    • AI analiz başarı oranı: %{(len(df_results[df_results['GÜVEN_YÜZDESİ'] >= 30])/len(df_results)*100):.1f}
-    • Yaptırım tespit hassasiyeti: %{(len(df_results[df_results['AB_LISTESINDE_BULUNDU'] == 'EVET'])/len(df_results)*100):.1f}
-    • Sistem güvenilirlik puanı: %{(avg_confidence * 0.7 + (100 - (high_risk_count/len(df_results)*100)) * 0.3):.1f}
-    """
-    
-    # Yorumu satırlara böl ve yaz
-    for i, line in enumerate(ai_comment.strip().split('\n')):
-        sheet[f'A{11 + i}'] = line.strip()
-        if line.strip().startswith('⛔') or line.strip().startswith('🔴'):
-            sheet[f'A{11 + i}'].font = Font(color="FF0000", bold=True)
-        elif line.strip().startswith('🟡'):
-            sheet[f'A{11 + i}'].font = Font(color="FFA500", bold=True)
-        elif line.strip().startswith('✅'):
-            sheet[f'A{11 + i}'].font = Font(color="00AA00", bold=True)
-    
-    # Sütun genişliklerini ayarla
-    sheet.column_dimensions['A'].width = 40
-    sheet.column_dimensions['B'].width = 20
+    except Exception as e:
+        print(f"❌ Excel oluşturma hatası: {e}")
+        return False
 
 def setup_driver():
     try:
-        # REMOTE CHROMEDRIVER - Browserless.io kullanıyoruz
+        # REMOTE CHROMEDRIVER - Browserless.io
         chrome_options = Options()
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage') 
@@ -624,7 +503,7 @@ def setup_driver():
         chrome_options.add_argument('--disable-gpu')
         chrome_options.add_argument('--window-size=1920,1080')
         
-        # Browserless.io - Ücretsiz remote Chrome servisi
+        # Browserless.io - Ücretsiz remote Chrome
         driver = webdriver.Remote(
             command_executor='https://chrome.browserless.io/webdriver',
             options=chrome_options
@@ -670,7 +549,6 @@ def run_analysis_for_company(company_name, country):
 
 # Test kodu
 if __name__ == "__main__":
-    # Örnek çalıştırma
     results = run_analysis_for_company("Genel Oto Sanayi", "Russia")
     if results:
         df_results = pd.DataFrame(results)
