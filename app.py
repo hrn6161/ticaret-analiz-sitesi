@@ -2,7 +2,8 @@ from flask import Flask, render_template, request, send_file, jsonify
 import threading
 import os
 import time
-from analiz_kodu import run_analysis_for_company, create_excel_file
+from analiz_kodu import run_analysis_for_company, create_advanced_excel_report
+import pandas as pd
 
 app = Flask(__name__)
 
@@ -36,7 +37,7 @@ def analyze():
         
         return jsonify({
             'success': True,
-            'message': f'{company_name} şirketi için analiz başlatıldı. Bu işlem 5-10 dakika sürebilir.',
+            'message': f'{company_name} şirketi için GERÇEK ZAMANLI AI analiz başlatıldı. Bu işlem 5-10 dakika sürebilir.',
             'file_id': filename
         })
         
@@ -45,47 +46,36 @@ def analyze():
 
 def run_analysis_in_thread(company_name, country, filepath):
     try:
+        print(f"🎯 GERÇEK ZAMANLI ANALİZ BAŞLATILDI: {company_name} - {country}")
         results = run_analysis_for_company(company_name, country)
         
-        if results:
-            success = create_excel_file(results, filepath)
-            if success:
-                print(f"✅ Analiz tamamlandı: {filepath}")
-            else:
-                print(f"❌ Excel oluşturma başarısız: {filepath}")
+        if results and len(results) > 0:
+            df_results = pd.DataFrame(results)
+            create_advanced_excel_report(df_results, filepath)
+            print(f"✅ GERÇEK ANALİZ TAMAMLANDI: {filepath}")
         else:
             # Boş sonuç için Excel oluştur
             empty_results = [{
-                'Şirket Adı': company_name,
-                'Ülke': country,
-                'Analiz Tarihi': 'Sonuç bulunamadı',
-                'Durum': 'HATA',
-                'Güven Yüzdesi': '%0',
-                'AI Açıklama': 'Analiz sonucu bulunamadı',
-                'Yaptırım Riski': 'BELİRSİZ',
-                'Tespit Edilen GTIPler': '',
-                'Yaptırımlı GTIPler': '',
-                'AI Yaptırım Uyarısı': 'Sonuç yok',
-                'AI Tavsiye': 'Tekrar deneyin'
+                'ŞİRKET': company_name,
+                'ÜLKE': country,
+                'DURUM': 'SONUÇ_BULUNAMADI',
+                'AI_AÇIKLAMA': 'Gerçek zamanlı analiz sonuç bulamadı',
+                'YAPTIRIM_RISKI': 'BELİRSİZ'
             }]
-            create_excel_file(empty_results, filepath)
+            df_empty = pd.DataFrame(empty_results)
+            create_advanced_excel_report(df_empty, filepath)
             
     except Exception as e:
         print(f"Analiz hatası: {e}")
         error_results = [{
-            'Şirket Adı': company_name,
-            'Ülke': country,
-            'Analiz Tarihi': 'Hata',
-            'Durum': 'HATA',
-            'Güven Yüzdesi': '%0',
-            'AI Açıklama': f'Analiz sırasında hata: {str(e)}',
-            'Yaptırım Riski': 'BELİRSİZ',
-            'Tespit Edilen GTIPler': '',
-            'Yaptırımlı GTIPler': '',
-            'AI Yaptırım Uyarısı': 'Sistem hatası',
-            'AI Tavsiye': 'Tekrar deneyin'
+            'ŞİRKET': company_name,
+            'ÜLKE': country,
+            'DURUM': 'HATA',
+            'AI_AçIKLAMA': f'Analiz sırasında hata: {str(e)}',
+            'YAPTIRIM_RISKI': 'BELİRSİZ'
         }]
-        create_excel_file(error_results, filepath)
+        df_error = pd.DataFrame(error_results)
+        create_advanced_excel_report(df_error, filepath)
 
 @app.route('/download/<file_id>')
 def download_file(file_id):
