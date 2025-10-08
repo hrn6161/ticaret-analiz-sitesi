@@ -19,7 +19,7 @@ def setup_driver():
     """LambdaTest ile remote ChromeDriver"""
     try:
         # LAMBDATEST CREDENTIALS - BUNLARI KENDİ BİLGİLERİNLE GÜNCELLE!
-        LT_USERNAME = "hbirinci6134"
+        LT_USERNAME = "hbirinci6134@gmail.com"
         LT_ACCESS_KEY = "LT_LflLMI9q0A3q79YpnwuBGqGiFOyYM0yhI1jEy7iNyCSFilh"
         
         if LT_ACCESS_KEY == "YOUR_ACCESS_KEY":
