@@ -1,27 +1,23 @@
-import pandas as pd
 import time
 import random
 import re
+import os
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
-import requests
-from bs4 import BeautifulSoup
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill
-import io
+from openpyxl.styles import Font, PatternFill, Alignment
 from datetime import datetime
 
 print("🚀 HIZLANDIRILMIŞ GERÇEK ZAMANLI YAPAY ZEKA YAPTIRIM ANALİZ SİSTEMİ BAŞLATILIYOR...")
 
 class RealTimeSanctionAnalyzer:
     def __init__(self):
-        self.sanctioned_codes = {}
         self.eu_sanction_url = "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A02014R0833-20250720"
         
     def extract_gtip_codes_from_text(self, text):
-        """Metinden GTIP/HS kodlarını çıkar - OPTİMİZE"""
+        """Metinden GTIP/HS kodlarını çıkar"""
         gtip_pattern = r'\b\d{4}(?:\.\d{2,4})?\b'
         codes = re.findall(gtip_pattern, text)
         
@@ -31,23 +27,23 @@ class RealTimeSanctionAnalyzer:
             if len(main_code) == 4:
                 main_codes.add(main_code)
         
-        return list(main_codes)[:5]  # Sadece ilk 5 GTIP
+        return list(main_codes)[:5]
     
     def check_eu_sanctions_realtime(self, driver, gtip_codes):
-        """AB yaptırım listesini gerçek zamanlı kontrol et - OPTİMİZE"""
+        """AB yaptırım listesini gerçek zamanlı kontrol et"""
         sanctioned_found = []
         sanction_details = {}
         
         try:
             print("       🌐 AB Yaptırım Listesi kontrol ediliyor...")
             
-            # HIZLI YÜKLEME: Sadece 3 saniye bekle
             driver.get(self.eu_sanction_url)
             time.sleep(3)
             
             page_content = driver.find_element(By.TAG_NAME, "body").text
             page_html = driver.page_source
             
+            from bs4 import BeautifulSoup
             soup = BeautifulSoup(page_html, 'html.parser')
             text_content = soup.get_text()
             
@@ -64,40 +60,35 @@ class RealTimeSanctionAnalyzer:
                 code_found = False
                 risk_level = "DÜŞÜK"
                 reason = ""
-                prohibition_confidence = 0
                 
                 if gtip_code in full_text:
                     code_found = True
-                    
                     code_pattern = r'\b' + re.escape(gtip_code) + r'\b'
                     code_matches = list(re.finditer(code_pattern, full_text))
                     
-                    # Sadece ilk 3 eşleşmeyi kontrol et
                     for match in code_matches[:3]:
-                        start_pos = max(0, match.start() - 150)  # Daha kısa context
+                        start_pos = max(0, match.start() - 150)
                         end_pos = min(len(full_text), match.end() + 150)
                         context = full_text[start_pos:end_pos].lower()
                         
                         risk_indicators = sum(1 for keyword in high_risk_keywords if keyword in context)
-                        prohibition_confidence = max(prohibition_confidence, risk_indicators)
                         
                         if risk_indicators >= 2:
                             risk_level = "YAPTIRIMLI_YÜKSEK_RISK"
-                            reason = f"GTIP {gtip_code} AB yaptırım listesinde ve yasaklayıcı ifadelerle birlikte geçiyor"
+                            reason = f"GTIP {gtip_code} AB yaptırım listesinde yasaklı"
                             break
                         elif risk_indicators >= 1:
                             risk_level = "YAPTIRIMLI_ORTA_RISK"
-                            reason = f"GTIP {gtip_code} AB kısıtlama listesinde geçiyor"
+                            reason = f"GTIP {gtip_code} AB kısıtlama listesinde"
                         else:
                             risk_level = "LISTEDE_VAR"
-                            reason = f"GTIP {gtip_code} AB listesinde geçiyor ama yasaklanmamış"
+                            reason = f"GTIP {gtip_code} AB listesinde ama yasaklanmamış"
                 
                 if code_found:
                     sanction_details[gtip_code] = {
                         'risk_level': risk_level,
                         'reason': reason,
-                        'found_in_sanction_list': True,
-                        'prohibition_confidence': prohibition_confidence
+                        'found_in_sanction_list': True
                     }
                     if risk_level in ["YAPTIRIMLI_YÜKSEK_RISK", "YAPTIRIMLI_ORTA_RISK"]:
                         sanctioned_found.append(gtip_code)
@@ -105,24 +96,21 @@ class RealTimeSanctionAnalyzer:
                     sanction_details[gtip_code] = {
                         'risk_level': "DÜŞÜK",
                         'reason': f"GTIP {gtip_code} AB yaptırım listesinde bulunamadı",
-                        'found_in_sanction_list': False,
-                        'prohibition_confidence': 0
+                        'found_in_sanction_list': False
                     }
             
             print(f"       ✅ AB yaptırım kontrolü tamamlandı: {len(sanctioned_found)} yüksek/orta riskli kod")
             
         except Exception as e:
             print(f"       ❌ AB yaptırım kontrol hatası: {e}")
-            # Fallback: Önceden tanımlı yaptırım listesi
-            predefined_sanctions = ['8703', '8708', '8407', '8471', '8542', '8802', '9306']
+            predefined_sanctions = ['8703', '8708', '8407', '8471', '8542']
             for code in gtip_codes:
                 if code in predefined_sanctions:
                     sanctioned_found.append(code)
                     sanction_details[code] = {
                         'risk_level': "YAPTIRIMLI_YÜKSEK_RISK",
                         'reason': f"GTIP {code} önceden tanımlı yaptırım listesinde",
-                        'found_in_sanction_list': True,
-                        'prohibition_confidence': 3
+                        'found_in_sanction_list': True
                     }
         
         return sanctioned_found, sanction_details
@@ -133,7 +121,7 @@ class AdvancedAIAnalyzer:
         self.sanction_analyzer = RealTimeSanctionAnalyzer()
     
     def smart_ai_analysis(self, text, company, country, driver=None):
-        """Gelişmiş Yerel Yapay Zeka Analizi - OPTİMİZE"""
+        """Gelişmiş Yerel Yapay Zeka Analizi"""
         try:
             text_lower = text.lower()
             company_lower = company.lower()
@@ -150,7 +138,6 @@ class AdvancedAIAnalyzer:
             sanctioned_codes = []
             sanction_analysis = {}
             
-            # SADECE RUSYA İÇİN YAPTIRIM KONTROLÜ - Diğer ülkelerde zaman kazan
             if driver and gtip_codes and country.lower() in ['russia', 'rusya']:
                 sanctioned_codes, sanction_analysis = self.sanction_analyzer.check_eu_sanctions_realtime(driver, gtip_codes)
             
@@ -168,7 +155,6 @@ class AdvancedAIAnalyzer:
                 reasons.append("Ülke ismi bulundu")
                 confidence_factors.append("Hedef ülke tanımlı")
             
-            # OPTİMİZE: Daha az trade terimi
             trade_indicators = {
                 'export': 20, 'import': 20, 'trade': 15, 'business': 15,
                 'partner': 15, 'supplier': 15, 'distributor': 15
@@ -180,7 +166,6 @@ class AdvancedAIAnalyzer:
                     keywords_found.append(term)
                     reasons.append(f"{term} terimi bulundu")
             
-            # OPTİMİZE: Daha az ürün anahtar kelimesi
             product_keywords = {
                 'automotive': '8703', 'vehicle': '8703', 'car': '8703', 
                 'parts': '8708', 'component': '8708', 'computer': '8471'
@@ -193,7 +178,6 @@ class AdvancedAIAnalyzer:
                         gtip_codes.append(gtip)
                     reasons.append(f"{product} ürün kategorisi tespit edildi (GTIP: {gtip})")
             
-            # OPTİMİZE: Daha az context kontrolü
             context_phrases = [
                 f"{company_lower}.*{country_lower}",
                 f"export.*{country_lower}",
@@ -206,27 +190,26 @@ class AdvancedAIAnalyzer:
                     context_matches += 1
                     reasons.append(f"Bağlam eşleşmesi: {phrase}")
             
-            if context_matches >= 1:  # Daha düşük threshold
+            if context_matches >= 1:
                 score += 15
                 confidence_factors.append("Güçlü bağlam")
             
             unique_trade_terms = len(set(keywords_found))
-            if unique_trade_terms >= 3:  # Daha düşük threshold
+            if unique_trade_terms >= 3:
                 score += 10
                 reasons.append(f"{unique_trade_terms} farklı ticaret terimi")
                 confidence_factors.append("Zengin terminoloji")
             
             word_count = len(text_lower.split())
-            if word_count > 300:  # Daha düşük threshold
+            if word_count > 300:
                 score += 5
                 confidence_factors.append("Detaylı içerik")
             
             sanctions_result = self.analyze_sanctions_risk(company, country, gtip_codes, sanctioned_codes, sanction_analysis)
             
-            max_possible = 150  # Daha düşük max puan
+            max_possible = 150
             percentage = (score / max_possible) * 100 if max_possible > 0 else 0
             
-            # Yaptırım durumuna göre final durumu belirle
             if sanctions_result['YAPTIRIM_RISKI'] == 'YAPTIRIMLI_YÜKSEK_RISK':
                 status = "YAPTIRIMLI_YÜKSEK_RISK"
                 explanation = f"⛔ YÜKSEK YAPTIRIM RİSKİ: {company} şirketi {country} ile yaptırımlı ürün ticareti yapıyor (%{percentage:.1f})"
@@ -236,10 +219,10 @@ class AdvancedAIAnalyzer:
             elif percentage >= 60:
                 status = "EVET"
                 explanation = f"✅ YÜKSEK GÜVEN: {company} şirketi {country} ile güçlü ticaret ilişkisi (%{percentage:.1f})"
-            elif percentage >= 40:  # Daha düşük threshold
+            elif percentage >= 40:
                 status = "OLASI"
                 explanation = f"🟡 ORTA GÜVEN: {company} şirketinin {country} ile ticaret olasılığı (%{percentage:.1f})"
-            elif percentage >= 25:  # Daha düşük threshold
+            elif percentage >= 25:
                 status = "ZAYIF"
                 explanation = f"🟢 DÜŞÜK GÜVEN: {company} şirketinin {country} ile sınırlı ticaret belirtileri (%{percentage:.1f})"
             else:
@@ -250,8 +233,9 @@ class AdvancedAIAnalyzer:
                 explanation += f" | {sanctions_result['AI_YAPTIRIM_UYARI']}"
             
             ai_report = {
+                'ŞİRKET': company,
+                'ÜLKE': country,
                 'DURUM': status,
-                'HAM_PUAN': score,
                 'GÜVEN_YÜZDESİ': percentage,
                 'AI_AÇIKLAMA': explanation,
                 'AI_NEDENLER': ' | '.join(reasons),
@@ -259,15 +243,14 @@ class AdvancedAIAnalyzer:
                 'AI_ANAHTAR_KELİMELER': ', '.join(keywords_found),
                 'AI_ANALİZ_TİPİ': 'Hızlı AI + Yaptırım Kontrolü',
                 'METİN_UZUNLUĞU': word_count,
-                'BENZERLİK_ORANI': f"%{percentage:.1f}",
                 'YAPTIRIM_RISKI': sanctions_result['YAPTIRIM_RISKI'],
                 'TESPIT_EDILEN_GTIPLER': ', '.join(gtip_codes),
                 'YAPTIRIMLI_GTIPLER': ', '.join(sanctions_result['YAPTIRIMLI_GTIPLER']),
-                'GTIP_ANALIZ_DETAY': sanctions_result['GTIP_ANALIZ_DETAY'],
                 'AI_YAPTIRIM_UYARI': sanctions_result['AI_YAPTIRIM_UYARI'],
                 'AI_TAVSIYE': sanctions_result['AI_TAVSIYE'],
                 'TESPIT_EDILEN_URUNLER': ', '.join(detected_products),
-                'AB_LISTESINDE_BULUNDU': sanctions_result['AB_LISTESINDE_BULUNDU']
+                'AB_LISTESINDE_BULUNDU': sanctions_result['AB_LISTESINDE_BULUNDU'],
+                'TARİH': datetime.now().strftime('%Y-%m-%d %H:%M')
             }
             
             self.analysis_history.append(ai_report)
@@ -276,8 +259,9 @@ class AdvancedAIAnalyzer:
             
         except Exception as e:
             return {
+                'ŞİRKET': company,
+                'ÜLKE': country,
                 'DURUM': 'HATA',
-                'HAM_PUAN': 0,
                 'GÜVEN_YÜZDESİ': 0,
                 'AI_AÇIKLAMA': f'AI analiz hatası: {str(e)}',
                 'AI_NEDENLER': '',
@@ -285,23 +269,21 @@ class AdvancedAIAnalyzer:
                 'AI_ANAHTAR_KELİMELER': '',
                 'AI_ANALİZ_TİPİ': 'Hata',
                 'METİN_UZUNLUĞU': 0,
-                'BENZERLİK_ORANI': '%0',
                 'YAPTIRIM_RISKI': 'BELİRSİZ',
                 'TESPIT_EDILEN_GTIPLER': '',
                 'YAPTIRIMLI_GTIPLER': '',
-                'GTIP_ANALIZ_DETAY': '',
                 'AI_YAPTIRIM_UYARI': 'Analiz hatası',
                 'AI_TAVSIYE': 'Tekrar deneyiniz',
                 'TESPIT_EDILEN_URUNLER': '',
-                'AB_LISTESINDE_BULUNDU': 'HAYIR'
+                'AB_LISTESINDE_BULUNDU': 'HAYIR',
+                'TARİH': datetime.now().strftime('%Y-%m-%d %H:%M')
             }
     
     def analyze_sanctions_risk(self, company, country, gtip_codes, sanctioned_codes, sanction_analysis):
-        """Gelişmiş yaptırım risk analizi - OPTİMİZE"""
+        """Gelişmiş yaptırım risk analizi"""
         analysis_result = {
             'YAPTIRIM_RISKI': 'DÜŞÜK',
             'YAPTIRIMLI_GTIPLER': [],
-            'GTIP_ANALIZ_DETAY': '',
             'AI_YAPTIRIM_UYARI': '',
             'AI_TAVSIYE': '',
             'AB_LISTESINDE_BULUNDU': 'HAYIR'
@@ -324,13 +306,6 @@ class AdvancedAIAnalyzer:
                 if high_risk_codes:
                     analysis_result['YAPTIRIM_RISKI'] = 'YAPTIRIMLI_YÜKSEK_RISK'
                     analysis_result['YAPTIRIMLI_GTIPLER'] = high_risk_codes
-                    
-                    details = []
-                    for code in high_risk_codes[:2]:  # Sadece ilk 2 detay
-                        if code in sanction_analysis:
-                            details.append(f"{code}: {sanction_analysis[code]['reason']}")
-                    
-                    analysis_result['GTIP_ANALIZ_DETAY'] = ' | '.join(details)
                     analysis_result['AI_YAPTIRIM_UYARI'] = f'⛔ YÜKSEK YAPTIRIM RİSKİ: {company} şirketi {country} ile YASAKLI GTIP ticareti: {", ".join(high_risk_codes)}'
                     analysis_result['AI_TAVSIYE'] = f'⛔ ACİL: Bu ürünlerin Rusya\'ya ihracı yasak! GTIP: {", ".join(high_risk_codes)}'
                 
@@ -352,11 +327,10 @@ class AdvancedAIAnalyzer:
         return analysis_result
 
 def fast_ai_enhanced_search(driver, company, country):
-    """HIZLI AI destekli arama - OPTİMİZE"""
+    """HIZLI AI destekli arama"""
     all_results = []
     ai_analyzer = AdvancedAIAnalyzer()
     
-    # OPTİMİZE: Sadece 2 arama terimi
     search_terms = [
         f"{company} {country} export",
         f"{company} {country} business"
@@ -367,15 +341,14 @@ def fast_ai_enhanced_search(driver, company, country):
             print(f"   🔍 Hızlı arama: '{term}'")
             
             driver.get("https://www.bing.com")
-            time.sleep(1)  # Daha kısa bekleme
+            time.sleep(1)
             
             search_box = driver.find_element(By.NAME, "q")
             search_box.clear()
             search_box.send_keys(term)
             search_box.send_keys(Keys.RETURN)
-            time.sleep(2)  # Daha kısa bekleme
+            time.sleep(2)
             
-            # OPTİMİZE: Sadece 2 sayfa
             for page_num in range(1, 3):
                 try:
                     print(f"     📄 {page_num}. sayfa AI analizi...")
@@ -394,9 +367,9 @@ def fast_ai_enhanced_search(driver, company, country):
                         
                         print(f"       🌐 Sayfa yükleniyor: {title[:50]}...")
                         driver.get(url)
-                        time.sleep(2)  # Daha kısa bekleme
+                        time.sleep(2)
                         
-                        page_content = driver.find_element(By.TAG_NAME, "body").text[:3000]  # Sadece ilk 3000 karakter
+                        page_content = driver.find_element(By.TAG_NAME, "body").text[:3000]
                         page_title = driver.title
                         
                         full_text = f"{page_title} {page_content}"
@@ -404,32 +377,12 @@ def fast_ai_enhanced_search(driver, company, country):
                         print("       🤖 Hızlı AI analiz yapılıyor...")
                         ai_result = ai_analyzer.smart_ai_analysis(full_text, company, country, driver)
                         
-                        result_data = {
-                            'ŞİRKET': company,
-                            'ÜLKE': country,
-                            'ARAMA_TERİMİ': term,
-                            'SAYFA_NUMARASI': page_num,
-                            'DURUM': ai_result['DURUM'],
-                            'HAM_PUAN': ai_result['HAM_PUAN'],
-                            'GÜVEN_YÜZDESİ': ai_result['GÜVEN_YÜZDESİ'],
-                            'AI_AÇIKLAMA': ai_result['AI_AÇIKLAMA'],
-                            'AI_NEDENLER': ai_result['AI_NEDENLER'],
-                            'AI_GÜVEN_FAKTÖRLERİ': ai_result['AI_GÜVEN_FAKTÖRLERİ'],
-                            'AI_ANAHTAR_KELİMELER': ai_result['AI_ANAHTAR_KELİMELER'],
-                            'AI_ANALİZ_TİPİ': ai_result['AI_ANALİZ_TİPİ'],
-                            'URL': url,
-                            'BAŞLIK': title,
-                            'İÇERİK_ÖZETİ': full_text[:300] + '...',
-                            'TARİH': datetime.now().strftime('%Y-%m-%d %H:%M'),
-                            'YAPTIRIM_RISKI': ai_result['YAPTIRIM_RISKI'],
-                            'TESPIT_EDILEN_GTIPLER': ai_result['TESPIT_EDILEN_GTIPLER'],
-                            'YAPTIRIMLI_GTIPLER': ai_result['YAPTIRIMLI_GTIPLER'],
-                            'GTIP_ANALIZ_DETAY': ai_result['GTIP_ANALIZ_DETAY'],
-                            'AI_YAPTIRIM_UYARI': ai_result['AI_YAPTIRIM_UYARI'],
-                            'AI_TAVSIYE': ai_result['AI_TAVSIYE'],
-                            'TESPIT_EDILEN_URUNLER': ai_result['TESPIT_EDILEN_URUNLER'],
-                            'AB_LISTESINDE_BULUNDU': ai_result['AB_LISTESINDE_BULUNDU']
-                        }
+                        result_data = ai_result
+                        result_data['URL'] = url
+                        result_data['BAŞLIK'] = title
+                        result_data['İÇERİK_ÖZETİ'] = full_text[:300] + '...'
+                        result_data['ARAMA_TERİMİ'] = term
+                        result_data['SAYFA_NUMARASI'] = page_num
                         
                         all_results.append(result_data)
                         
@@ -453,13 +406,13 @@ def fast_ai_enhanced_search(driver, company, country):
                         driver.close()
                         driver.switch_to.window(original_window)
                         
-                        time.sleep(1)  # Daha kısa bekleme
+                        time.sleep(1)
                         
                 except Exception as e:
                     print(f"       ❌ {page_num}. sayfa hatası: {e}")
                     continue
             
-            time.sleep(3)  # Daha kısa bekleme
+            time.sleep(3)
             
         except Exception as e:
             print(f"   ❌ Arama hatası: {e}")
@@ -467,29 +420,112 @@ def fast_ai_enhanced_search(driver, company, country):
     
     return all_results
 
-def create_advanced_excel_report(df_results, filename='hizli_analiz_sonuc.xlsx'):
-    """Gelişmiş Excel raporu oluştur - OPTİMİZE"""
+def create_advanced_excel_report(results, filename='hizli_analiz_sonuc.xlsx'):
+    """Gelişmiş Excel raporu oluştur - Pandas'sız"""
     
     try:
-        with pd.ExcelWriter(filename, engine='openpyxl') as writer:
-            workbook = writer.book
-            
-            # 1. Tüm AI Sonuçları
-            df_results.to_excel(writer, sheet_name='AI Analiz Sonuçları', index=False)
-            
-            # 2. Yüksek Riskli Sonuçlar
-            high_risk = df_results[df_results['YAPTIRIM_RISKI'].isin(['YAPTIRIMLI_YÜKSEK_RISK', 'YAPTIRIMLI_ORTA_RISK'])]
-            if not high_risk.empty:
-                high_risk.to_excel(writer, sheet_name='Yüksek Riskli', index=False)
-            
-            # 3. Detaylı Analiz (Basitleştirilmiş)
-            analysis_details = df_results[['ŞİRKET', 'ÜLKE', 'DURUM', 'GÜVEN_YÜZDESİ', 
-                                         'YAPTIRIM_RISKI', 'TESPIT_EDILEN_GTIPLER', 
-                                         'YAPTIRIMLI_GTIPLER', 'AI_YAPTIRIM_UYARI', 
-                                         'AI_TAVSIYE', 'URL']]
-            analysis_details.to_excel(writer, sheet_name='Detaylı Analiz', index=False)
+        wb = Workbook()
         
-        print(f"✅ Hızlı Excel raporu oluşturuldu: {filename}")
+        # 1. Tüm AI Sonuçları
+        ws1 = wb.active
+        ws1.title = "AI Analiz Sonuçları"
+        
+        headers = [
+            'ŞİRKET', 'ÜLKE', 'DURUM', 'GÜVEN_YÜZDESİ', 'AI_AÇIKLAMA',
+            'YAPTIRIM_RISKI', 'TESPIT_EDILEN_GTIPLER', 'YAPTIRIMLI_GTIPLER',
+            'AI_YAPTIRIM_UYARI', 'AI_TAVSIYE', 'URL', 'TARİH'
+        ]
+        
+        # Başlıkları yaz
+        for col, header in enumerate(headers, 1):
+            cell = ws1.cell(row=1, column=col, value=header)
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+            cell.alignment = Alignment(horizontal="center")
+        
+        # Verileri yaz
+        for row, result in enumerate(results, 2):
+            ws1.cell(row=row, column=1, value=result.get('ŞİRKET', ''))
+            ws1.cell(row=row, column=2, value=result.get('ÜLKE', ''))
+            ws1.cell(row=row, column=3, value=result.get('DURUM', ''))
+            ws1.cell(row=row, column=4, value=result.get('GÜVEN_YÜZDESİ', ''))
+            ws1.cell(row=row, column=5, value=result.get('AI_AÇIKLAMA', ''))
+            ws1.cell(row=row, column=6, value=result.get('YAPTIRIM_RISKI', ''))
+            ws1.cell(row=row, column=7, value=result.get('TESPIT_EDILEN_GTIPLER', ''))
+            ws1.cell(row=row, column=8, value=result.get('YAPTIRIMLI_GTIPLER', ''))
+            ws1.cell(row=row, column=9, value=result.get('AI_YAPTIRIM_UYARI', ''))
+            ws1.cell(row=row, column=10, value=result.get('AI_TAVSIYE', ''))
+            ws1.cell(row=row, column=11, value=result.get('URL', ''))
+            ws1.cell(row=row, column=12, value=result.get('TARİH', ''))
+        
+        # 2. Yüksek Riskli Sonuçlar
+        high_risk = [r for r in results if r.get('YAPTIRIM_RISKI') in ['YAPTIRIMLI_YÜKSEK_RISK', 'YAPTIRIMLI_ORTA_RISK']]
+        if high_risk:
+            ws2 = wb.create_sheet("Yüksek Riskli")
+            for col, header in enumerate(headers, 1):
+                cell = ws2.cell(row=1, column=col, value=header)
+                cell.font = Font(bold=True, color="FFFFFF")
+                cell.fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
+            
+            for row, result in enumerate(high_risk, 2):
+                ws2.cell(row=row, column=1, value=result.get('ŞİRKET', ''))
+                ws2.cell(row=row, column=2, value=result.get('ÜLKE', ''))
+                ws2.cell(row=row, column=3, value=result.get('DURUM', ''))
+                ws2.cell(row=row, column=4, value=result.get('GÜVEN_YÜZDESİ', ''))
+                ws2.cell(row=row, column=5, value=result.get('AI_AÇIKLAMA', ''))
+                ws2.cell(row=row, column=6, value=result.get('YAPTIRIM_RISKI', ''))
+                ws2.cell(row=row, column=7, value=result.get('TESPIT_EDILEN_GTIPLER', ''))
+                ws2.cell(row=row, column=8, value=result.get('YAPTIRIMLI_GTIPLER', ''))
+                ws2.cell(row=row, column=9, value=result.get('AI_YAPTIRIM_UYARI', ''))
+                ws2.cell(row=row, column=10, value=result.get('AI_TAVSIYE', ''))
+                ws2.cell(row=row, column=11, value=result.get('URL', ''))
+                ws2.cell(row=row, column=12, value=result.get('TARİH', ''))
+        
+        # 3. AI Özeti
+        ws3 = wb.create_sheet("AI Özeti")
+        summary_headers = ['ŞİRKET', 'ÜLKE', 'TOPLAM_ANALİZ', 'ORTALAMA_GÜVEN', 'MAX_GÜVEN', 'YÜKSEK_RİSK_SAYISI']
+        for col, header in enumerate(summary_headers, 1):
+            ws3.cell(row=1, column=col, value=header).font = Font(bold=True)
+        
+        # Şirket bazlı özet
+        company_summary = {}
+        for result in results:
+            company = result['ŞİRKET']
+            if company not in company_summary:
+                company_summary[company] = {
+                    'ülke': result['ÜLKE'],
+                    'analiz_sayısı': 0,
+                    'güven_toplam': 0,
+                    'max_güven': 0,
+                    'yüksek_risk_sayısı': 0
+                }
+            
+            summary = company_summary[company]
+            summary['analiz_sayısı'] += 1
+            summary['güven_toplam'] += result['GÜVEN_YÜZDESİ']
+            summary['max_güven'] = max(summary['max_güven'], result['GÜVEN_YÜZDESİ'])
+            if result['YAPTIRIM_RISKI'] in ['YAPTIRIMLI_YÜKSEK_RISK', 'YAPTIRIMLI_ORTA_RISK']:
+                summary['yüksek_risk_sayısı'] += 1
+        
+        row = 2
+        for company, data in company_summary.items():
+            ws3.cell(row=row, column=1, value=company)
+            ws3.cell(row=row, column=2, value=data['ülke'])
+            ws3.cell(row=row, column=3, value=data['analiz_sayısı'])
+            ws3.cell(row=row, column=4, value=round(data['güven_toplam'] / data['analiz_sayısı'], 1))
+            ws3.cell(row=row, column=5, value=data['max_güven'])
+            ws3.cell(row=row, column=6, value=data['yüksek_risk_sayısı'])
+            row += 1
+        
+        # Sütun genişliklerini ayarla
+        for ws in [ws1, ws2, ws3]:
+            if ws:
+                column_widths = [25, 15, 20, 15, 50, 20, 25, 25, 50, 50, 30, 20]
+                for col, width in enumerate(column_widths, 1):
+                    ws.column_dimensions[chr(64 + col)].width = width
+        
+        wb.save(filename)
+        print(f"✅ Excel raporu oluşturuldu: {filename}")
         return True
         
     except Exception as e:
@@ -530,12 +566,22 @@ def run_fast_analysis_for_company(company_name, country):
             'ÜLKE': country,
             'DURUM': 'HATA',
             'AI_AÇIKLAMA': 'ChromeDriver başlatılamadı',
-            'YAPTIRIM_RISKI': 'BELİRSİZ'
+            'YAPTIRIM_RISKI': 'BELİRSİZ',
+            'GÜVEN_YÜZDESİ': 0,
+            'TARİH': datetime.now().strftime('%Y-%m-%d %H:%M')
         }]
     
     try:
         results = fast_ai_enhanced_search(driver, company_name, country)
-        return results
+        return results if results else [{
+            'ŞİRKET': company_name,
+            'ÜLKE': country,
+            'DURUM': 'SONUÇ_BULUNAMADI',
+            'AI_AÇIKLAMA': 'Hızlı analiz sonuç bulamadı',
+            'YAPTIRIM_RISKI': 'BELİRSİZ',
+            'GÜVEN_YÜZDESİ': 0,
+            'TARİH': datetime.now().strftime('%Y-%m-%d %H:%M')
+        }]
     except Exception as e:
         print(f"❌ Analiz hatası: {e}")
         return [{
@@ -543,7 +589,9 @@ def run_fast_analysis_for_company(company_name, country):
             'ÜLKE': country,
             'DURUM': 'HATA',
             'AI_AÇIKLAMA': f'Analiz sırasında hata: {str(e)}',
-            'YAPTIRIM_RISKI': 'BELİRSİZ'
+            'YAPTIRIM_RISKI': 'BELİRSİZ',
+            'GÜVEN_YÜZDESİ': 0,
+            'TARİH': datetime.now().strftime('%Y-%m-%d %H:%M')
         }]
     finally:
         if driver:
@@ -554,17 +602,16 @@ def run_fast_analysis_for_company(company_name, country):
 if __name__ == "__main__":
     results = run_fast_analysis_for_company("Genel Oto Sanayi", "Russia")
     if results:
-        df_results = pd.DataFrame(results)
-        create_advanced_excel_report(df_results)
+        create_advanced_excel_report(results)
         
         total_analysis = len(results)
-        high_conf_count = len(df_results[df_results['GÜVEN_YÜZDESİ'] >= 60])
-        high_risk_count = len(df_results[df_results['YAPTIRIM_RISKI'] == 'YAPTIRIMLI_YÜKSEK_RISK'])
+        high_risk = len([r for r in results if r['YAPTIRIM_RISKI'] in ['YAPTIRIMLI_YÜKSEK_RISK', 'YAPTIRIMLI_ORTA_RISK']])
+        high_confidence = len([r for r in results if r['GÜVEN_YÜZDESİ'] >= 60])
         
         print(f"\n📊 HIZLI ANALİZ İSTATİSTİKLERİ:")
         print(f"   • Toplam Analiz: {total_analysis}")
-        print(f"   • Yüksek Güven: {high_conf_count}")
-        print(f"   • Yüksek Risk: {high_risk_count}")
+        print(f"   • Yüksek Güven: {high_confidence}")
+        print(f"   • Yüksek Risk: {high_risk}")
         print("✅ Hızlı analiz tamamlandı!")
     else:
         print("❌ Analiz sonucu bulunamadı!")
