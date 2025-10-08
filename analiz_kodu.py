@@ -7,9 +7,9 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from pyvirtualdisplay import Display
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
@@ -19,36 +19,66 @@ from openpyxl.styles import Font, PatternFill, Alignment
 print("🚀 GERÇEK ZEKA YAPTIRIM ANALİZ SİSTEMİ BAŞLATILIYOR...")
 
 def setup_driver():
-    """WebDriver Manager ile otomatik ChromeDriver kurulumu"""
+    """Virtual Display ile ChromeDriver kurulumu"""
     try:
+        # Virtual display başlat (Render için gerekli)
+        display = Display(visible=0, size=(1920, 1080))
+        display.start()
+        print("✅ Virtual Display başlatıldı")
+        
         chrome_options = Options()
         
         # Render için optimize ayarlar
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
-        chrome_options.add_argument('--headless=new')
+        chrome_options.add_argument('--headless')
         chrome_options.add_argument('--disable-gpu')
         chrome_options.add_argument('--window-size=1920,1080')
         chrome_options.add_argument('--disable-extensions')
         chrome_options.add_argument('--disable-images')
+        chrome_options.add_argument('--blink-settings=imagesEnabled=false')
         
-        # WebDriver Manager ile otomatik ChromeDriver kur
-        service = Service(ChromeDriverManager().install())
+        # Performans optimizasyonları
+        chrome_options.add_argument('--no-first-run')
+        chrome_options.add_argument('--no-default-browser-check')
+        chrome_options.add_argument('--disable-background-timer-throttling')
+        
+        # User-agent
+        chrome_options.add_argument('--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+        
+        # Chrome binary path
+        chrome_options.binary_location = '/usr/bin/google-chrome'
+        
+        # ChromeDriver service
+        service = Service('/usr/local/bin/chromedriver')
+        
         driver = webdriver.Chrome(service=service, options=chrome_options)
         
         # Timeout ayarları
         driver.set_page_load_timeout(45)
         driver.implicitly_wait(15)
         
-        print("✅ ChromeDriver başlatıldı (WebDriver Manager)")
-        return driver
+        print("✅ ChromeDriver başlatıldı (Virtual Display)")
+        return driver, display
         
     except Exception as e:
         print(f"❌ ChromeDriver hatası: {e}")
-        return None
+        try:
+            # Fallback: basit headless mod
+            chrome_options = Options()
+            chrome_options.add_argument('--headless')
+            chrome_options.add_argument('--no-sandbox')
+            chrome_options.add_argument('--disable-dev-shm-usage')
+            
+            driver = webdriver.Chrome(options=chrome_options)
+            print("✅ Fallback ChromeDriver başlatıldı")
+            return driver, None
+        except Exception as e2:
+            print(f"❌ Fallback driver da başarısız: {e2}")
+            return None, None
 
 def create_excel_file(results, filepath):
-    """Excel dosyası oluştur (pandas olmadan)"""
+    """Excel dosyası oluştur"""
     try:
         wb = Workbook()
         ws = wb.active
@@ -100,11 +130,11 @@ def create_excel_file(results, filepath):
 
 def run_analysis_for_company(company_name, country):
     """
-    Ana analiz fonksiyonu - WebDriver Manager ile
+    Ana analiz fonksiyonu - Virtual Display ile
     """
     print(f"🔍 Analiz başlatıldı: {company_name} - {country}")
     
-    driver = setup_driver()
+    driver, display = setup_driver()
     if not driver:
         return [{
             'Şirket Adı': company_name,
@@ -112,12 +142,12 @@ def run_analysis_for_company(company_name, country):
             'Analiz Tarihi': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'Durum': 'HATA',
             'Güven Yüzdesi': '%0',
-            'AI Açıklama': 'ChromeDriver başlatılamadı',
+            'AI Açıklama': 'ChromeDriver başlatılamadı - Sistem yapılandırma hatası',
             'Yaptırım Riski': 'BELİRSİZ',
             'Tespit Edilen GTIPler': '',
             'Yaptırımlı GTIPler': '',
-            'AI Yaptırım Uyarısı': 'Sistem hatası',
-            'AI Tavsiye': 'Tekrar deneyin'
+            'AI Yaptırım Uyarısı': 'Teknik sistem hatası',
+            'AI Tavsiye': 'Lütfen daha sonra tekrar deneyin'
         }]
     
     try:
@@ -125,7 +155,7 @@ def run_analysis_for_company(company_name, country):
         
         all_results = []
         
-        # DuckDuckGo ile arama (daha az bloklanan)
+        # DuckDuckGo ile arama
         search_urls = [
             ("https://duckduckgo.com", "q"),
             ("https://html.duckduckgo.com/html", "q")
@@ -143,10 +173,9 @@ def run_analysis_for_company(company_name, country):
                 
                 for term in search_terms:
                     try:
+                        print(f"       🔎 Arama terimi: {term}")
                         driver.get(search_url)
-                        WebDriverWait(driver, 10).wait(
-                            EC.presence_of_element_located((By.NAME, search_box_name))
-                        )
+                        time.sleep(3)
                         
                         search_box = driver.find_element(By.NAME, search_box_name)
                         search_box.clear()
@@ -156,7 +185,7 @@ def run_analysis_for_company(company_name, country):
                         time.sleep(4)
                         
                         # Sonuçları al
-                        results = driver.find_elements(By.CSS_SELECTOR, "div.result, li.b_algo, div.g")
+                        results = driver.find_elements(By.CSS_SELECTOR, "div.result, li.b_algo, div.g, .result__body")
                         
                         if results:
                             result = results[0]
@@ -199,7 +228,7 @@ def run_analysis_for_company(company_name, country):
                                 driver.close()
                                 driver.switch_to.window(driver.window_handles[0])
                                 
-                                # Başarılı olduk, diğer aramalara geçme
+                                print("       ✅ Gerçek web tarama başarılı!")
                                 break
                                 
                             except Exception as e:
@@ -243,6 +272,9 @@ def run_analysis_for_company(company_name, country):
         if driver:
             driver.quit()
             print("✅ ChromeDriver kapatıldı")
+        if display:
+            display.stop()
+            print("✅ Virtual Display kapatıldı")
 
 def generate_advanced_simulation(company_name, country):
     """Gelişmiş AI simülasyon sonucu"""
