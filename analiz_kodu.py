@@ -3,14 +3,9 @@ import random
 import re
 import os
 import pandas as pd
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from bs4 import BeautifulSoup
 import requests
+from bs4 import BeautifulSoup
+from fake_useragent import UserAgent
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from datetime import datetime
@@ -20,6 +15,7 @@ print("🚀 ORJİNAL YAPAY ZEKA YAPTIRIM ANALİZ SİSTEMİ BAŞLATILIYOR...")
 class RealTimeSanctionAnalyzer:
     def __init__(self):
         self.eu_sanction_url = "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A02014R0833-20250720"
+        self.ua = UserAgent()
         
     def extract_gtip_codes_from_text(self, text):
         """Metinden GTIP/HS kodlarını çıkar"""
@@ -34,25 +30,20 @@ class RealTimeSanctionAnalyzer:
         
         return list(main_codes)[:5]
     
-    def check_eu_sanctions_realtime(self, driver, gtip_codes):
-        """AB yaptırım listesini gerçek zamanlı kontrol et"""
+    def check_eu_sanctions_realtime(self, gtip_codes):
+        """AB yaptırım listesini kontrol et"""
         sanctioned_found = []
         sanction_details = {}
         
         try:
             print("       🌐 AB Yaptırım Listesi kontrol ediliyor...")
             
-            driver.get(self.eu_sanction_url)
-            time.sleep(3)
+            headers = {'User-Agent': self.ua.random}
+            response = requests.get(self.eu_sanction_url, headers=headers, timeout=30)
+            response.raise_for_status()
             
-            page_content = driver.find_element(By.TAG_NAME, "body").text
-            page_html = driver.page_source
-            
-            from bs4 import BeautifulSoup
-            soup = BeautifulSoup(page_html, 'html.parser')
+            soup = BeautifulSoup(response.content, 'html.parser')
             text_content = soup.get_text()
-            
-            full_text = page_content + " " + text_content
             
             high_risk_keywords = [
                 'prohibited', 'restricted', 'sanction', 'ban', 'embargo',
@@ -66,15 +57,15 @@ class RealTimeSanctionAnalyzer:
                 risk_level = "DÜŞÜK"
                 reason = ""
                 
-                if gtip_code in full_text:
+                if gtip_code in text_content:
                     code_found = True
                     code_pattern = r'\b' + re.escape(gtip_code) + r'\b'
-                    code_matches = list(re.finditer(code_pattern, full_text))
+                    code_matches = list(re.finditer(code_pattern, text_content))
                     
                     for match in code_matches[:3]:
                         start_pos = max(0, match.start() - 150)
-                        end_pos = min(len(full_text), match.end() + 150)
-                        context = full_text[start_pos:end_pos].lower()
+                        end_pos = min(len(text_content), match.end() + 150)
+                        context = text_content[start_pos:end_pos].lower()
                         
                         risk_indicators = sum(1 for keyword in high_risk_keywords if keyword in context)
                         
@@ -125,7 +116,7 @@ class AdvancedAIAnalyzer:
         self.analysis_history = []
         self.sanction_analyzer = RealTimeSanctionAnalyzer()
     
-    def smart_ai_analysis(self, text, company, country, driver=None):
+    def smart_ai_analysis(self, text, company, country):
         """Gelişmiş Yerel Yapay Zeka Analizi"""
         try:
             text_lower = text.lower()
@@ -143,8 +134,8 @@ class AdvancedAIAnalyzer:
             sanctioned_codes = []
             sanction_analysis = {}
             
-            if driver and gtip_codes and country.lower() in ['russia', 'rusya']:
-                sanctioned_codes, sanction_analysis = self.sanction_analyzer.check_eu_sanctions_realtime(driver, gtip_codes)
+            if gtip_codes and country.lower() in ['russia', 'rusya']:
+                sanctioned_codes, sanction_analysis = self.sanction_analyzer.check_eu_sanctions_realtime(gtip_codes)
             
             company_words = [word for word in company_lower.split() if len(word) > 3]
             company_found = any(word in text_lower for word in company_words)
@@ -331,169 +322,111 @@ class AdvancedAIAnalyzer:
         
         return analysis_result
 
-def fast_ai_enhanced_search(driver, company, country):
-    """HIZLI AI destekli arama"""
+def search_web_content(company, country):
+    """Web'de içerik ara - Requests ile"""
     all_results = []
     ai_analyzer = AdvancedAIAnalyzer()
+    ua = UserAgent()
     
     search_terms = [
         f"{company} {country} export",
-        f"{company} {country} business"
+        f"{company} {country} business",
+        f"{company} Russia trade"
     ]
     
     for term in search_terms:
         try:
-            print(f"   🔍 Hızlı arama: '{term}'")
+            print(f"   🔍 Arama: '{term}'")
             
-            driver.get("https://www.bing.com")
-            time.sleep(1)
+            headers = {'User-Agent': ua.random}
             
-            search_box = driver.find_element(By.NAME, "q")
-            search_box.clear()
-            search_box.send_keys(term)
-            search_box.send_keys(Keys.RETURN)
-            time.sleep(2)
+            # Google arama
+            url = f"https://www.google.com/search?q={term.replace(' ', '+')}&num=5"
+            response = requests.get(url, headers=headers, timeout=10)
             
-            for page_num in range(1, 3):
-                try:
-                    print(f"     📄 {page_num}. sayfa AI analizi...")
-                    
-                    results = driver.find_elements(By.CSS_SELECTOR, "li.b_algo")
-                    
-                    if len(results) >= page_num:
-                        result = results[page_num - 1]
-                        link = result.find_element(By.CSS_SELECTOR, "h2 a")
-                        url = link.get_attribute("href")
-                        title = link.text
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.text, 'html.parser')
+                
+                # Sonuçları parse et
+                results = soup.find_all('div', class_='g')[:3]
+                
+                for i, result in enumerate(results):
+                    try:
+                        title_elem = result.find('h3')
+                        link_elem = result.find('a')
                         
-                        original_window = driver.current_window_handle
-                        driver.execute_script("window.open('');")
-                        driver.switch_to.window(driver.window_handles[-1])
+                        if title_elem and link_elem:
+                            title = title_elem.text
+                            url = link_elem['href']
+                            
+                            # URL'yi temizle
+                            if url.startswith('/url?q='):
+                                url = url.split('/url?q=')[1].split('&')[0]
+                            
+                            print(f"     📄 {i+1}. {title[:50]}...")
+                            
+                            # Sayfa içeriğini al
+                            try:
+                                page_response = requests.get(url, headers=headers, timeout=8)
+                                if page_response.status_code == 200:
+                                    page_soup = BeautifulSoup(page_response.text, 'html.parser')
+                                    
+                                    # Script ve style tag'lerini temizle
+                                    for script in page_soup(["script", "style"]):
+                                        script.decompose()
+                                    
+                                    page_text = page_soup.get_text()
+                                    # Fazla boşlukları temizle
+                                    lines = (line.strip() for line in page_text.splitlines())
+                                    chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+                                    page_text = ' '.join(chunk for chunk in chunks if chunk)
+                                    
+                                    full_text = f"{title} {page_text}"[:3000]
+                                    
+                                    print("       🤖 AI analiz yapılıyor...")
+                                    ai_result = ai_analyzer.smart_ai_analysis(full_text, company, country)
+                                    
+                                    result_data = ai_result
+                                    result_data['URL'] = url
+                                    result_data['BAŞLIK'] = title
+                                    result_data['İÇERİK_ÖZETİ'] = page_text[:200] + '...'
+                                    result_data['ARAMA_TERİMİ'] = term
+                                    result_data['SAYFA_NUMARASI'] = i + 1
+                                    
+                                    all_results.append(result_data)
+                                    
+                                    status_color = {
+                                        'YAPTIRIMLI_YÜKSEK_RISK': '⛔',
+                                        'YAPTIRIMLI_ORTA_RISK': '🟡',
+                                        'EVET': '✅',
+                                        'OLASI': '🟡', 
+                                        'ZAYIF': '🟢',
+                                        'HAYIR': '⚪',
+                                        'HATA': '❌'
+                                    }
+                                    
+                                    color = status_color.get(ai_result['DURUM'], '⚪')
+                                    risk_indicator = '🔴' if ai_result['YAPTIRIM_RISKI'] in ['YAPTIRIMLI_YÜKSEK_RISK', 'YAPTIRIMLI_ORTA_RISK'] else '🟢'
+                                    
+                                    print(f"         {color} {ai_result['DURUM']} (%{ai_result['GÜVEN_YÜZDESİ']:.1f}) {risk_indicator}")
+                                    if ai_result['TESPIT_EDILEN_GTIPLER']:
+                                        print(f"         📦 GTIP: {ai_result['TESPIT_EDILEN_GTIPLER']}")
+                                    
+                            except Exception as e:
+                                print(f"       ❌ Sayfa hatası: {e}")
+                                continue
+                                
+                    except Exception as e:
+                        print(f"     ❌ Sonuç işleme hatası: {e}")
+                        continue
                         
-                        print(f"       🌐 Sayfa yükleniyor: {title[:50]}...")
-                        driver.get(url)
-                        time.sleep(2)
-                        
-                        page_content = driver.find_element(By.TAG_NAME, "body").text[:3000]
-                        page_title = driver.title
-                        
-                        full_text = f"{page_title} {page_content}"
-                        
-                        print("       🤖 Hızlı AI analiz yapılıyor...")
-                        ai_result = ai_analyzer.smart_ai_analysis(full_text, company, country, driver)
-                        
-                        result_data = ai_result
-                        result_data['URL'] = url
-                        result_data['BAŞLIK'] = title
-                        result_data['İÇERİK_ÖZETİ'] = full_text[:300] + '...'
-                        result_data['ARAMA_TERİMİ'] = term
-                        result_data['SAYFA_NUMARASI'] = page_num
-                        
-                        all_results.append(result_data)
-                        
-                        status_color = {
-                            'YAPTIRIMLI_YÜKSEK_RISK': '⛔',
-                            'YAPTIRIMLI_ORTA_RISK': '🟡',
-                            'EVET': '✅',
-                            'OLASI': '🟡', 
-                            'ZAYIF': '🟢',
-                            'HAYIR': '⚪',
-                            'HATA': '❌'
-                        }
-                        
-                        color = status_color.get(ai_result['DURUM'], '⚪')
-                        risk_indicator = '🔴' if ai_result['YAPTIRIM_RISKI'] in ['YAPTIRIMLI_YÜKSEK_RISK', 'YAPTIRIMLI_ORTA_RISK'] else '🟢'
-                        
-                        print(f"         {color} {ai_result['DURUM']} (%{ai_result['GÜVEN_YÜZDESİ']:.1f}) {risk_indicator}")
-                        if ai_result['TESPIT_EDILEN_GTIPLER']:
-                            print(f"         📦 GTIP: {ai_result['TESPIT_EDILEN_GTIPLER']}")
-                        
-                        driver.close()
-                        driver.switch_to.window(original_window)
-                        
-                        time.sleep(1)
-                        
-                except Exception as e:
-                    print(f"       ❌ {page_num}. sayfa hatası: {e}")
-                    continue
-            
-            time.sleep(3)
+            time.sleep(2)  # Rate limiting
             
         except Exception as e:
-            print(f"   ❌ Arama hatası: {e}")
+            print(f"❌ Arama hatası: {e}")
             continue
     
     return all_results
-
-def setup_driver():
-    """Chrome driver kurulumu - Render için optimize"""
-    try:
-        chrome_options = Options()
-        chrome_options.add_argument('--no-sandbox')
-        chrome_options.add_argument('--disable-dev-shm-usage')
-        chrome_options.add_argument('--headless')
-        chrome_options.add_argument('--disable-gpu')
-        chrome_options.add_argument('--window-size=1920,1080')
-        chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        chrome_options.add_experimental_option('useAutomationExtension', False)
-        
-        # Render'da Chrome path
-        chrome_options.binary_location = '/usr/bin/google-chrome'
-        
-        driver = webdriver.Chrome(options=chrome_options)
-        driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-        
-        print("✅ ChromeDriver başarıyla başlatıldı")
-        return driver
-    except Exception as e:
-        print(f"❌ ChromeDriver hatası: {e}")
-        return None
-
-def run_fast_analysis_for_company(company_name, country):
-    """
-    HIZLI analiz fonksiyonu - 2-3 dakikada sonuç
-    """
-    print(f"🔍 HIZLI ANALİZ BAŞLATILDI: {company_name} - {country}")
-    
-    driver = setup_driver()
-    if not driver:
-        return [{
-            'ŞİRKET': company_name,
-            'ÜLKE': country,
-            'DURUM': 'HATA',
-            'AI_AÇIKLAMA': 'ChromeDriver başlatılamadı',
-            'YAPTIRIM_RISKI': 'BELİRSİZ',
-            'GÜVEN_YÜZDESİ': 0,
-            'TARİH': datetime.now().strftime('%Y-%m-%d %H:%M')
-        }]
-    
-    try:
-        results = fast_ai_enhanced_search(driver, company_name, country)
-        return results if results else [{
-            'ŞİRKET': company_name,
-            'ÜLKE': country,
-            'DURUM': 'SONUÇ_BULUNAMADI',
-            'AI_AÇIKLAMA': 'Hızlı analiz sonuç bulamadı',
-            'YAPTIRIM_RISKI': 'BELİRSİZ',
-            'GÜVEN_YÜZDESİ': 0,
-            'TARİH': datetime.now().strftime('%Y-%m-%d %H:%M')
-        }]
-    except Exception as e:
-        print(f"❌ Analiz hatası: {e}")
-        return [{
-            'ŞİRKET': company_name,
-            'ÜLKE': country,
-            'DURUM': 'HATA',
-            'AI_AÇIKLAMA': f'Analiz sırasında hata: {str(e)}',
-            'YAPTIRIM_RISKI': 'BELİRSİZ',
-            'GÜVEN_YÜZDESİ': 0,
-            'TARİH': datetime.now().strftime('%Y-%m-%d %H:%M')
-        }]
-    finally:
-        if driver:
-            driver.quit()
-            print("✅ ChromeDriver kapatıldı")
 
 def create_advanced_excel_report(results, filename='hizli_analiz_sonuc.xlsx'):
     """Gelişmiş Excel raporu oluştur"""
@@ -607,9 +540,38 @@ def create_advanced_excel_report(results, filename='hizli_analiz_sonuc.xlsx'):
         print(f"❌ Excel oluşturma hatası: {e}")
         return False
 
+def run_fast_analysis_for_company(company_name, country):
+    """
+    HIZLI analiz fonksiyonu - 2-3 dakikada sonuç
+    """
+    print(f"🔍 HIZLI ANALİZ BAŞLATILDI: {company_name} - {country}")
+    
+    try:
+        results = search_web_content(company_name, country)
+        return results if results else [{
+            'ŞİRKET': company_name,
+            'ÜLKE': country,
+            'DURUM': 'SONUÇ_BULUNAMADI',
+            'AI_AÇIKLAMA': 'Hızlı analiz sonuç bulamadı',
+            'YAPTIRIM_RISKI': 'BELİRSİZ',
+            'GÜVEN_YÜZDESİ': 0,
+            'TARİH': datetime.now().strftime('%Y-%m-%d %H:%M')
+        }]
+    except Exception as e:
+        print(f"❌ Analiz hatası: {e}")
+        return [{
+            'ŞİRKET': company_name,
+            'ÜLKE': country,
+            'DURUM': 'HATA',
+            'AI_AÇIKLAMA': f'Analiz sırasında hata: {str(e)}',
+            'YAPTIRIM_RISKI': 'BELİRSİZ',
+            'GÜVEN_YÜZDESİ': 0,
+            'TARİH': datetime.now().strftime('%Y-%m-%d %H:%M')
+        }]
+
 # Test kodu
 if __name__ == "__main__":
-    results = run_fast_analysis_for_company("Genel Oto Sanayi", "Russia")
+    results = run_fast_analysis_for_company("Toyota", "Russia")
     if results:
         create_advanced_excel_report(results)
         
