@@ -3,7 +3,6 @@ import threading
 import os
 import time
 from analiz_kodu import run_analysis_for_company, create_advanced_excel_report
-import pandas as pd
 
 app = Flask(__name__)
 
@@ -50,8 +49,7 @@ def run_analysis_in_thread(company_name, country, filepath):
         results = run_analysis_for_company(company_name, country)
         
         if results and len(results) > 0:
-            df_results = pd.DataFrame(results)
-            create_advanced_excel_report(df_results, filepath)
+            create_advanced_excel_report(results, filepath)
             print(f"✅ GERÇEK ANALİZ TAMAMLANDI: {filepath}")
         else:
             # Boş sonuç için Excel oluştur
@@ -60,10 +58,11 @@ def run_analysis_in_thread(company_name, country, filepath):
                 'ÜLKE': country,
                 'DURUM': 'SONUÇ_BULUNAMADI',
                 'AI_AÇIKLAMA': 'Gerçek zamanlı analiz sonuç bulamadı',
-                'YAPTIRIM_RISKI': 'BELİRSİZ'
+                'YAPTIRIM_RISKI': 'BELİRSİZ',
+                'GÜVEN_YÜZDESİ': 0,
+                'TARİH': time.strftime('%Y-%m-%d %H:%M')
             }]
-            df_empty = pd.DataFrame(empty_results)
-            create_advanced_excel_report(df_empty, filepath)
+            create_advanced_excel_report(empty_results, filepath)
             
     except Exception as e:
         print(f"Analiz hatası: {e}")
@@ -71,11 +70,12 @@ def run_analysis_in_thread(company_name, country, filepath):
             'ŞİRKET': company_name,
             'ÜLKE': country,
             'DURUM': 'HATA',
-            'AI_AçIKLAMA': f'Analiz sırasında hata: {str(e)}',
-            'YAPTIRIM_RISKI': 'BELİRSİZ'
+            'AI_AÇIKLAMA': f'Analiz sırasında hata: {str(e)}',
+            'YAPTIRIM_RISKI': 'BELİRSİZ',
+            'GÜVEN_YÜZDESİ': 0,
+            'TARİH': time.strftime('%Y-%m-%d %H:%M')
         }]
-        df_error = pd.DataFrame(error_results)
-        create_advanced_excel_report(df_error, filepath)
+        create_advanced_excel_report(error_results, filepath)
 
 @app.route('/download/<file_id>')
 def download_file(file_id):
