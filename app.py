@@ -1,3 +1,4 @@
+from flask import Flask, request, jsonify, send_file, render_template
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
@@ -9,7 +10,10 @@ from openpyxl.styles import Font
 import os
 from datetime import datetime
 
-print("🚀 DUCKDUCKGO İLE GERÇEK ZAMANLI YAPAY ZEKA YAPTIRIM ANALİZ SİSTEMİ BAŞLATILIYOR...")
+app = Flask(__name__)
+
+# Sadece Flask app başlatma mesajı
+print("🚀 Flask AI Ticaret Analiz Sistemi Başlatılıyor...")
 
 class RealTimeSanctionAnalyzer:
     def __init__(self):
@@ -17,14 +21,13 @@ class RealTimeSanctionAnalyzer:
         
     def extract_gtip_codes_from_text(self, text):
         """Metinden GTIP/HS kodlarını çıkar - GELİŞMİŞ VERSİYON"""
-        # Geliştirilmiş pattern: 4, 6, 8 haneli kodlar ve HS code formatları
         patterns = [
-            r'\b\d{4}\.?\d{0,4}\b',  # 8703.21.00 gibi
-            r'\bHS\s?CODE\s?:?\s?(\d{4,8})\b',  # HS CODE: 8703
-            r'\bHS\s?:?\s?(\d{4,8})\b',  # HS: 8703
-            r'\bGTIP\s?:?\s?(\d{4,8})\b',  # GTIP: 8703
-            r'\bH\.S\.\s?CODE?\s?:?\s?(\d{4,8})\b',  # H.S. CODE: 8703
-            r'\bHarmonized System\s?Code\s?:?\s?(\d{4,8})\b',  # Harmonized System Code: 8703
+            r'\b\d{4}\.?\d{0,4}\b',
+            r'\bHS\s?CODE\s?:?\s?(\d{4,8})\b',
+            r'\bHS\s?:?\s?(\d{4,8})\b',
+            r'\bGTIP\s?:?\s?(\d{4,8})\b',
+            r'\bH\.S\.\s?CODE?\s?:?\s?(\d{4,8})\b',
+            r'\bHarmonized System\s?Code\s?:?\s?(\d{4,8})\b',
         ]
         
         all_codes = set()
@@ -33,24 +36,20 @@ class RealTimeSanctionAnalyzer:
             matches = re.findall(pattern, text, re.IGNORECASE)
             for match in matches:
                 if isinstance(match, tuple):
-                    match = match[0]  # Grup yakalama durumu
+                    match = match[0]
                 
-                # Sadece sayısal kısmı al
                 code = re.sub(r'[^\d]', '', match)
                 if len(code) >= 4:
-                    main_code = code[:4]  # İlk 4 hane ana kod
+                    main_code = code[:4]
                     if main_code.isdigit():
                         all_codes.add(main_code)
         
-        # Ek olarak metinde geçen 4 haneli sayıları da kontrol et (yanlış pozitifleri azaltmak için)
         number_pattern = r'\b\d{4}\b'
         numbers = re.findall(number_pattern, text)
         
-        # Yüksek olasılıklı GTIP kodları (8700-8900 arası genellikle makina/taşıt)
         for num in numbers:
             if num.isdigit():
                 num_int = int(num)
-                # Makina, taşıt, elektronik gibi kategori aralıkları
                 if (8400 <= num_int <= 8600) or (8700 <= num_int <= 8900) or (9000 <= num_int <= 9300):
                     all_codes.add(num)
         
@@ -64,46 +63,16 @@ class RealTimeSanctionAnalyzer:
         try:
             print("       🌐 AB Yaptırım Listesi kontrol ediliyor...")
             
-            # GENİŞLETİLMİŞ yaptırımlı kod listesi
             predefined_sanctions = {
-                # Taşıtlar ve parçaları
-                '8701': "Traktörler",
-                '8702': "Motorlu taşıtlar",
-                '8703': "Otomobiller, yük taşıtları",
-                '8704': "Kamyonlar",
-                '8705': "Özel amaçlı taşıtlar",
-                '8706': "Şasiler",
-                '8707': "Motorlar",
-                '8708': "Taşıt parçaları",
-                
-                # Havacılık
-                '8802': "Uçaklar, helikopterler",
-                '8803': "Uçak parçaları",
-                
-                # Silahlar
-                '9301': "Silahlar",
-                '9302': "Tabancalar",
-                '9303': "Tüfekler",
-                '9306': "Bombalar, torpidolar",
-                
-                # Elektronik ve haberleşme
-                '8471': "Bilgisayarlar",
-                '8526': "Radar cihazları",
-                '8542': "Entegre devreler",
-                '8543': "Elektronik cihazlar",
-                
-                # Makinalar
-                '8407': "İçten yanmalı motorlar",
-                '8408': "Dizel motorlar",
-                '8409': "Motor parçaları",
-                
-                # Diğer stratejik ürünler
-                '8479': "Makinalar",
-                '8501': "Elektrik motorları",
-                '8517': "Telekom cihazları",
-                '8525': "Kamera sistemleri",
-                '8529': "Radyo cihazları",
-                '8531': "Elektrik cihazları",
+                '8701': "Traktörler", '8702': "Motorlu taşıtlar", '8703': "Otomobiller", 
+                '8704': "Kamyonlar", '8705': "Özel amaçlı taşıtlar", '8706': "Şasiler",
+                '8707': "Motorlar", '8708': "Taşıt parçaları", '8802': "Uçaklar, helikopterler",
+                '8803': "Uçak parçaları", '9301': "Silahlar", '9302': "Tabancalar",
+                '9303': "Tüfekler", '9306': "Bombalar, torpidolar", '8471': "Bilgisayarlar",
+                '8526': "Radar cihazları", '8542': "Entegre devreler", '8543': "Elektronik cihazlar",
+                '8407': "İçten yanmalı motorlar", '8408': "Dizel motorlar", '8409': "Motor parçaları",
+                '8479': "Makinalar", '8501': "Elektrik motorları", '8517': "Telekom cihazları",
+                '8525': "Kamera sistemleri", '8529': "Radyo cihazları", '8531': "Elektrik cihazları",
                 '8541': "Yarı iletkenler"
             }
             
@@ -151,10 +120,8 @@ class AdvancedAIAnalyzer:
             confidence_factors = []
             detected_products = []
             
-            # GTIP kodlarını çıkar - ÖNCELİKLİ
             gtip_codes = self.sanction_analyzer.extract_gtip_codes_from_text(text)
             
-            # GTIP kodları bulunduysa puanı artır
             if gtip_codes:
                 score += 40
                 reasons.append(f"GTIP kodları tespit edildi: {', '.join(gtip_codes)}")
@@ -181,13 +148,11 @@ class AdvancedAIAnalyzer:
                 reasons.append("Ülke ismi bulundu")
                 confidence_factors.append("Hedef ülke tanımlı")
             
-            # Geliştirilmiş ticaret terimleri
             trade_indicators = {
-                'export': 15, 'import': 15, 'trade': 12, 'trading': 10,
-                'business': 10, 'partner': 12, 'market': 10, 'distributor': 15,
-                'supplier': 12, 'dealer': 10, 'agent': 8, 'cooperation': 10,
-                'collaboration': 8, 'shipment': 10, 'logistics': 8, 'customs': 8,
-                'foreign': 6, 'international': 8, 'overseas': 6, 'global': 6,
+                'export': 15, 'import': 15, 'trade': 12, 'trading': 10, 'business': 10,
+                'partner': 12, 'market': 10, 'distributor': 15, 'supplier': 12, 'dealer': 10,
+                'agent': 8, 'cooperation': 10, 'collaboration': 8, 'shipment': 10, 'logistics': 8,
+                'customs': 8, 'foreign': 6, 'international': 8, 'overseas': 6, 'global': 6,
                 'hs code': 20, 'gtip': 20, 'harmonized system': 20, 'customs code': 15
             }
             
@@ -197,23 +162,12 @@ class AdvancedAIAnalyzer:
                     keywords_found.append(term)
                     reasons.append(f"{term} terimi bulundu")
             
-            # Genişletilmiş ürün anahtar kelimeleri
             product_keywords = {
                 'automotive': '8703', 'vehicle': '8703', 'car': '8703', 'motor': '8407',
                 'engine': '8407', 'parts': '8708', 'component': '8708', 'truck': '8704',
-                'tractor': '8701', 'trailer': '8716', 'bus': '8702', 'motorcycle': '8711',
-                'computer': '8471', 'electronic': '8542', 'aircraft': '8802', 'airplane': '8802',
-                'helicopter': '8802', 'weapon': '9306', 'chemical': '2844', 'signal': '8517',
-                'bulldozer': '8429', 'excavator': '8429', 'generator': '8502', 'transformer': '8504',
-                'battery': '8507', 'drone': '8806', 'missile': '9301', 'tank': '8710',
-                'submarine': '8901', 'warship': '8906', 'radar': '8526', 'sonar': '9015',
-                'optical': '9013', 'navigation': '9014', 'semiconductor': '8541',
-                'integrated circuit': '8542', 'microchip': '8542', 'circuit': '8542',
-                'transmission': '8517', 'reception': '8517', 'antenna': '8517', 'server': '8471',
-                'router': '8517', 'switch': '8517', 'radio': '8527', 'television': '8528',
-                'camera': '8525', 'lens': '9002', 'software': '8523', 'encryption': '8543',
-                'cryptographic': '8543', 'security': '8543', 'bearing': '8482', 'pump': '8413',
-                'valve': '8481', 'machine': '8479', 'equipment': '8479', 'tool': '8207'
+                'tractor': '8701', 'computer': '8471', 'electronic': '8542', 'aircraft': '8802',
+                'weapon': '9306', 'chemical': '2844', 'signal': '8517', 'drone': '8806',
+                'missile': '9301', 'radar': '8526', 'semiconductor': '8541'
             }
             
             for product, gtip in product_keywords.items():
@@ -223,15 +177,12 @@ class AdvancedAIAnalyzer:
                         gtip_codes.append(gtip)
                     reasons.append(f"{product} ürün kategorisi tespit edildi (GTIP: {gtip})")
             
-            # Bağlam analizi
             context_phrases = [
                 f"{company_lower}.*{country_lower}",
                 f"export.*{country_lower}",
                 f"business.*{country_lower}",
                 f"partner.*{country_lower}",
                 f"market.*{country_lower}",
-                f"ship.*{country_lower}",
-                f"trade.*{country_lower}"
             ]
             
             context_matches = 0
@@ -257,10 +208,9 @@ class AdvancedAIAnalyzer:
             
             sanctions_result = self.analyze_sanctions_risk(company, country, gtip_codes, sanctioned_codes, sanction_analysis)
             
-            max_possible = 250  # Puan arttığı için maksimumu yükselt
+            max_possible = 250
             percentage = (score / max_possible) * 100 if max_possible > 0 else 0
             
-            # Risk değerlendirmesi - GTIP odaklı
             if sanctions_result['YAPTIRIM_RISKI'] == 'YAPTIRIMLI_YÜKSEK_RISK':
                 status = "YAPTIRIMLI_YÜKSEK_RISK"
                 explanation = f"⛔ YÜKSEK YAPTIRIM RİSKİ: {company} şirketi {country} ile yaptırımlı ürün ticareti yapıyor (%{percentage:.1f})"
@@ -305,40 +255,24 @@ class AdvancedAIAnalyzer:
             }
             
             self.analysis_history.append(ai_report)
-            
             return ai_report
             
         except Exception as e:
             return {
-                'DURUM': 'HATA',
-                'HAM_PUAN': 0,
-                'GÜVEN_YÜZDESİ': 0,
-                'AI_AÇIKLAMA': f'AI analiz hatası: {str(e)}',
-                'AI_NEDENLER': '',
-                'AI_GÜVEN_FAKTÖRLERİ': '',
-                'AI_ANAHTAR_KELİMELER': '',
-                'AI_ANALİZ_TİPİ': 'Hata',
-                'METİN_UZUNLUĞU': 0,
-                'BENZERLİK_ORANI': '%0',
-                'YAPTIRIM_RISKI': 'BELİRSİZ',
-                'TESPIT_EDILEN_GTIPLER': '',
-                'YAPTIRIMLI_GTIPLER': '',
-                'GTIP_ANALIZ_DETAY': '',
-                'AI_YAPTIRIM_UYARI': 'Analiz hatası',
-                'AI_TAVSIYE': 'Tekrar deneyiniz',
-                'TESPIT_EDILEN_URUNLER': '',
-                'AB_LISTESINDE_BULUNDU': 'HAYIR'
+                'DURUM': 'HATA', 'HAM_PUAN': 0, 'GÜVEN_YÜZDESİ': 0,
+                'AI_AÇIKLAMA': f'AI analiz hatası: {str(e)}', 'AI_NEDENLER': '',
+                'AI_GÜVEN_FAKTÖRLERİ': '', 'AI_ANAHTAR_KELİMELER': '', 'AI_ANALİZ_TİPİ': 'Hata',
+                'METİN_UZUNLUĞU': 0, 'BENZERLİK_ORANI': '%0', 'YAPTIRIM_RISKI': 'BELİRSİZ',
+                'TESPIT_EDILEN_GTIPLER': '', 'YAPTIRIMLI_GTIPLER': '', 'GTIP_ANALIZ_DETAY': '',
+                'AI_YAPTIRIM_UYARI': 'Analiz hatası', 'AI_TAVSIYE': 'Tekrar deneyiniz',
+                'TESPIT_EDILEN_URUNLER': '', 'AB_LISTESINDE_BULUNDU': 'HAYIR'
             }
     
     def analyze_sanctions_risk(self, company, country, gtip_codes, sanctioned_codes, sanction_analysis):
-        """Gelişmiş yaptırım risk analizi - GTIP odaklı"""
+        """Gelişmiş yaptırım risk analizi"""
         analysis_result = {
-            'YAPTIRIM_RISKI': 'DÜŞÜK',
-            'YAPTIRIMLI_GTIPLER': [],
-            'GTIP_ANALIZ_DETAY': '',
-            'AI_YAPTIRIM_UYARI': '',
-            'AI_TAVSIYE': '',
-            'AB_LISTESINDE_BULUNDU': 'HAYIR'
+            'YAPTIRIM_RISKI': 'DÜŞÜK', 'YAPTIRIMLI_GTIPLER': [], 'GTIP_ANALIZ_DETAY': '',
+            'AI_YAPTIRIM_UYARI': '', 'AI_TAVSIYE': '', 'AB_LISTESINDE_BULUNDU': 'HAYIR'
         }
         
         if country.lower() in ['russia', 'rusya', 'russian'] and gtip_codes:
@@ -358,12 +292,10 @@ class AdvancedAIAnalyzer:
                 if high_risk_codes:
                     analysis_result['YAPTIRIM_RISKI'] = 'YAPTIRIMLI_YÜKSEK_RISK'
                     analysis_result['YAPTIRIMLI_GTIPLER'] = high_risk_codes
-                    
                     details = []
                     for code in high_risk_codes:
                         if code in sanction_analysis:
                             details.append(f"{code}: {sanction_analysis[code]['reason']}")
-                    
                     analysis_result['GTIP_ANALIZ_DETAY'] = ' | '.join(details)
                     analysis_result['AI_YAPTIRIM_UYARI'] = f'⛔ YÜKSEK YAPTIRIM RİSKİ: {company} şirketi {country} ile YASAKLI GTIP kodlarında ticaret yapıyor: {", ".join(high_risk_codes)}'
                     analysis_result['AI_TAVSIYE'] = f'⛔ BU ÜRÜNLERİN RUSYA\'YA İHRACI KESİNLİKLE YASAKTIR! GTIP: {", ".join(high_risk_codes)}. Acilen hukuki danışmanlık alın.'
@@ -371,12 +303,10 @@ class AdvancedAIAnalyzer:
                 elif medium_risk_codes:
                     analysis_result['YAPTIRIM_RISKI'] = 'YAPTIRIMLI_ORTA_RISK'
                     analysis_result['YAPTIRIMLI_GTIPLER'] = medium_risk_codes
-                    
                     details = []
                     for code in medium_risk_codes:
                         if code in sanction_analysis:
                             details.append(f"{code}: {sanction_analysis[code]['reason']}")
-                    
                     analysis_result['GTIP_ANALIZ_DETAY'] = ' | '.join(details)
                     analysis_result['AI_YAPTIRIM_UYARI'] = f'🟡 ORTA YAPTIRIM RİSKİ: {company} şirketi {country} ile kısıtlamalı GTIP kodlarında ticaret yapıyor: {", ".join(medium_risk_codes)}'
                     analysis_result['AI_TAVSIYE'] = f'🟡 Bu GTIP kodları kısıtlamalı olabilir: {", ".join(medium_risk_codes)}. Resmi makamlardan teyit alınması önerilir.'
@@ -392,4 +322,195 @@ class AdvancedAIAnalyzer:
         
         return analysis_result
 
-# ... (diğer fonksiyonlar aynı, sadece yukarıdaki class'lar değişti)
+def duckduckgo_search(query, max_results=3):
+    """DuckDuckGo'dan arama sonuçlarını al"""
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+    }
+    
+    search_results = []
+    
+    try:
+        url = f"https://html.duckduckgo.com/html/?q={query}"
+        response = requests.get(url, headers=headers)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        results = soup.find_all('div', class_='result')[:max_results]
+        
+        for i, result in enumerate(results):
+            try:
+                title_elem = result.find('a', class_='result__a')
+                link_elem = result.find('a', class_='result__url')
+                
+                if title_elem and link_elem:
+                    title = title_elem.text.strip()
+                    url = link_elem.get('href')
+                    
+                    if url and url.startswith('//duckduckgo.com/l/'):
+                        url = url.replace('//duckduckgo.com/l/', 'https://')
+                    
+                    search_results.append({
+                        'title': title,
+                        'url': url,
+                        'rank': i + 1
+                    })
+                    
+            except Exception as e:
+                print(f"Sonuç parse hatası: {e}")
+                continue
+                
+    except Exception as e:
+        print(f"Arama hatası: {e}")
+    
+    return search_results
+
+def get_page_content(url):
+    """Web sayfası içeriğini al"""
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        title = soup.title.string if soup.title else "Başlık bulunamadı"
+        content = soup.get_text()
+        
+        return {
+            'url': url,
+            'title': title,
+            'content': content,
+            'status': 'BAŞARILI'
+        }
+        
+    except Exception as e:
+        return {
+            'url': url,
+            'title': f'Hata: {str(e)}',
+            'content': '',
+            'status': 'HATA'
+        }
+
+def ai_enhanced_search(company, country):
+    """AI destekli DuckDuckGo araması"""
+    all_results = []
+    ai_analyzer = AdvancedAIAnalyzer()
+    
+    search_terms = [
+        f"{company} {country} export",
+        f"{company} {country} trade",
+        f"{company} {country} business",
+        f"{company} {country} GTIP"
+    ]
+    
+    for term in search_terms:
+        try:
+            print(f"Aranıyor: '{term}'")
+            results = duckduckgo_search(term)
+            
+            for i, result in enumerate(results):
+                print(f"Sonuç analizi: {result['title'][:50]}...")
+                page_data = get_page_content(result['url'])
+                
+                if page_data['status'] == 'BAŞARILI':
+                    print("AI analiz yapılıyor...")
+                    ai_result = ai_analyzer.smart_ai_analysis(page_data['content'], company, country)
+                    
+                    result_data = {
+                        'ŞİRKET': company, 'ÜLKE': country, 'ARAMA_TERİMİ': term,
+                        'SAYFA_NUMARASI': result['rank'], 'DURUM': ai_result['DURUM'],
+                        'HAM_PUAN': ai_result['HAM_PUAN'], 'GÜVEN_YÜZDESİ': ai_result['GÜVEN_YÜZDESİ'],
+                        'AI_AÇIKLAMA': ai_result['AI_AÇIKLAMA'], 'AI_NEDENLER': ai_result['AI_NEDENLER'],
+                        'AI_GÜVEN_FAKTÖRLERİ': ai_result['AI_GÜVEN_FAKTÖRLERİ'],
+                        'AI_ANAHTAR_KELİMELER': ai_result['AI_ANAHTAR_KELİMELER'],
+                        'AI_ANALİZ_TİPİ': ai_result['AI_ANALİZ_TİPİ'], 'URL': result['url'],
+                        'BAŞLIK': result['title'], 'İÇERİK_ÖZETİ': page_data['content'][:400] + '...',
+                        'TARİH': datetime.now().strftime('%Y-%m-%d %H:%M'),
+                        'YAPTIRIM_RISKI': ai_result['YAPTIRIM_RISKI'],
+                        'TESPIT_EDILEN_GTIPLER': ai_result['TESPIT_EDILEN_GTIPLER'],
+                        'YAPTIRIMLI_GTIPLER': ai_result['YAPTIRIMLI_GTIPLER'],
+                        'GTIP_ANALIZ_DETAY': ai_result['GTIP_ANALIZ_DETAY'],
+                        'AI_YAPTIRIM_UYARI': ai_result['AI_YAPTIRIM_UYARI'],
+                        'AI_TAVSIYE': ai_result['AI_TAVSIYE'],
+                        'TESPIT_EDILEN_URUNLER': ai_result['TESPIT_EDILEN_URUNLER'],
+                        'AB_LISTESINDE_BULUNDU': ai_result['AB_LISTESINDE_BULUNDU']
+                    }
+                    
+                    all_results.append(result_data)
+                    print(f"Sonuç: {ai_result['DURUM']} (%{ai_result['GÜVEN_YÜZDESİ']:.1f})")
+                
+                time.sleep(2)
+            
+            time.sleep(3)
+            
+        except Exception as e:
+            print(f"Arama hatası: {e}")
+            continue
+    
+    return all_results
+
+def create_excel_report(df_results, filename):
+    """Excel raporu oluştur"""
+    try:
+        with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+            df_results.to_excel(writer, sheet_name='AI Analiz Sonuçları', index=False)
+        return True
+    except Exception as e:
+        print(f"Excel oluşturma hatası: {e}")
+        return False
+
+# Flask Routes
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/analyze', methods=['POST'])
+def analyze():
+    try:
+        data = request.get_json()
+        company = data.get('company', '').strip()
+        country = data.get('country', '').strip()
+        
+        if not company or not country:
+            return jsonify({'success': False, 'error': 'Şirket ve ülke bilgisi gereklidir'})
+        
+        print(f"Yeni analiz isteği: {company} ↔ {country}")
+        
+        results = ai_enhanced_search(company, country)
+        
+        if results:
+            df_results = pd.DataFrame(results)
+            filename = f"{company.replace(' ', '_')}_{country}_analiz.xlsx"
+            
+            if create_excel_report(df_results, filename):
+                return jsonify({
+                    'success': True,
+                    'company': company,
+                    'country': country,
+                    'total_results': len(results),
+                    'filename': filename
+                })
+            else:
+                return jsonify({'success': False, 'error': 'Excel dosyası oluşturulamadı'})
+        else:
+            return jsonify({'success': False, 'error': 'Hiç sonuç bulunamadı'})
+            
+    except Exception as e:
+        print(f"Analiz hatası: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/download/<filename>')
+def download_file(filename):
+    try:
+        return send_file(filename, as_attachment=True)
+    except Exception as e:
+        return f"Dosya bulunamadı: {e}", 404
+
+@app.route('/health')
+def health():
+    return jsonify({'status': 'healthy', 'timestamp': datetime.now().isoformat()})
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
