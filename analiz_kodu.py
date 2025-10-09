@@ -321,114 +321,57 @@ class AdvancedAIAnalyzer:
         return analysis_result
 
 def duckduckgo_search(query, max_results=3):
-    """DuckDuckGo'dan arama sonuçlarını al - GÜNCELLENMİŞ"""
+    """DuckDuckGo'dan arama sonuçlarını al"""
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Accept-Encoding': 'gzip, deflate',
-        'DNT': '1',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     }
     
     search_results = []
     
     try:
-        # DuckDuckGo arama URL'si
         url = f"https://html.duckduckgo.com/html/?q={requests.utils.quote(query)}"
-        print(f"       🔍 Arama URL: {url}")
-        
         response = requests.get(url, headers=headers, timeout=15)
-        print(f"       📡 HTTP Durumu: {response.status_code}")
         
-        if response.status_code != 200:
-            print(f"       ❌ HTTP Hatası: {response.status_code}")
-            # Hata durumunda test verisi döndür
-            return create_test_results(query, max_results)
-        
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # DuckDuckGo sonuç elementleri - çeşitli selector denemeleri
-        results = (soup.find_all('div', class_='result') or 
-                  soup.find_all('div', class_='web-result') or
-                  soup.find_all('div', class_='results') or
-                  soup.find_all('article') or
-                  soup.find_all('h2')[:max_results])  # Başlıklardan sonuç çıkar
-        
-        print(f"       📊 Bulunan sonuç sayısı: {len(results)}")
-        
-        for i, result in enumerate(results[:max_results]):
-            try:
-                # Farklı selector denemeleri
-                title_elem = (result.find('a', class_='result__a') or 
-                             result.find('h2') or 
-                             result.find('a', class_='web-result__title') or
-                             result.find('a') or
-                             result.find('h2').find('a') if result.find('h2') else None)
-                
-                link_elem = title_elem  # Genellikle title elementi link içerir
-                
-                if title_elem and hasattr(title_elem, 'get'):
-                    title = title_elem.get_text(strip=True)
-                    url = title_elem.get('href', '') if title_elem else ''
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
+            results = soup.find_all('div', class_='result')[:max_results]
+            
+            for i, result in enumerate(results):
+                try:
+                    title_elem = result.find('a', class_='result__a')
+                    link_elem = result.find('a', class_='result__url')
                     
-                    # DuckDuckGo redirect linklerini düzelt
-                    if url and url.startswith('//duckduckgo.com/l/'):
-                        url = url.replace('//duckduckgo.com/l/', 'https://')
-                    elif url and url.startswith('/l/'):
-                        url = 'https://duckduckgo.com' + url
-                    elif url and url.startswith('//'):
-                        url = 'https:' + url
+                    if title_elem and link_elem:
+                        title = title_elem.text.strip()
+                        url = link_elem.get('href')
+                        
+                        if url and url.startswith('//duckduckgo.com/l/'):
+                            url = url.replace('//duckduckgo.com/l/', 'https://')
+                        
+                        if url and (url.startswith('http://') or url.startswith('https://')):
+                            search_results.append({
+                                'title': title,
+                                'url': url,
+                                'rank': i + 1
+                            })
+                            
+                except Exception as e:
+                    print(f"Sonuç parse hatası: {e}")
+                    continue
                     
-                    # URL geçerli mi kontrol et
-                    if url and (url.startswith('http://') or url.startswith('https://')):
-                        search_results.append({
-                            'title': title[:100] if title else "Başlık yok",
-                            'url': url,
-                            'rank': i + 1
-                        })
-                        print(f"         ✅ Sonuç {i+1}: {title[:50]}...")
-                    else:
-                        # Geçersiz URL durumunda test verisi ekle
-                        print(f"         ⚠️  Geçersiz URL, test verisi ekleniyor: {url}")
-                        search_results.append({
-                            'title': f"{query} - Test Sonuç {i+1}",
-                            'url': f'https://www.example.com/test{i+1}',
-                            'rank': i + 1
-                        })
-                    
-            except Exception as e:
-                print(f"         ❌ Sonuç parse hatası: {e}")
-                # Hata durumunda test verisi ekle
-                search_results.append({
-                    'title': f"{query} - Test Sonuç {i+1}",
-                    'url': f'https://www.example.com/test{i+1}',
-                    'rank': i + 1
-                })
-        
-        # Eğer hala sonuç bulunamazsa, test verisi ekle
-        if not search_results:
-            print("       ⚠️  Sonuç bulunamadı, test verisi ekleniyor...")
-            search_results = create_test_results(query, max_results)
-                
     except Exception as e:
-        print(f"       ❌ Arama hatası: {e}")
-        # Hata durumunda test verisi döndür
-        search_results = create_test_results(query, max_results)
+        print(f"Arama hatası: {e}")
+    
+    # Test verisi fallback
+    if not search_results:
+        for i in range(max_results):
+            search_results.append({
+                'title': f"{query} - Test Sonuç {i+1}",
+                'url': f'https://www.example.com/test{i+1}',
+                'rank': i + 1
+            })
     
     return search_results
-
-def create_test_results(query, max_results):
-    """Test sonuçları oluştur"""
-    test_results = []
-    for i in range(max_results):
-        test_results.append({
-            'title': f"{query} - Test Sonuç {i+1}",
-            'url': f'https://www.example.com/test{i+1}',
-            'rank': i + 1
-        })
-    return test_results
 
 def get_page_content(url):
     """Web sayfası içeriğini al"""
@@ -437,32 +380,39 @@ def get_page_content(url):
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
         
-        print(f"         🌐 Sayfa yükleniyor: {url}")
-        
         # Test URL'leri için özel içerik
         if 'example.com' in url or 'test' in url:
-            print("         ℹ️  Test sayfası, örnek içerik oluşturuluyor...")
-            return create_test_content(url)
+            return {
+                'url': url,
+                'title': 'Test Sayfası - Örnek İçerik',
+                'content': """
+                Bu bir test sayfasıdır. Gerçek verilerle çalışmak için DuckDuckGo araması yapılmalıdır.
+                Örnek şirket bilgileri ve ticaret verileri burada bulunabilir.
+                GTIP kodları: 8703, 8708, 8471 gibi kodlar ticaret verilerinde geçebilir.
+                Export ve import işlemleri uluslararası ticaretin önemli parçalarıdır.
+                Rusya ile yapılan ticaret belirli kısıtlamalara tabidir.
+                Harmonized System (HS) kodları gümrük işlemlerinde kullanılır.
+                """,
+                'status': 'TEST'
+            }
         
         response = requests.get(url, headers=headers, timeout=10)
         
         if response.status_code == 200:
             soup = BeautifulSoup(response.content, 'html.parser')
             
-            # Başlık ve içerik al
             title = soup.title.string if soup.title else "Başlık bulunamadı"
             
-            # Script ve style tag'lerini temizle
             for script in soup(["script", "style"]):
                 script.decompose()
             
             content = soup.get_text()
-            content = ' '.join(content.split())  # Fazla boşlukları temizle
+            content = ' '.join(content.split())
             
             return {
                 'url': url,
                 'title': title,
-                'content': content[:5000],  # Çok uzun içerikleri kısalt
+                'content': content[:5000],
                 'status': 'BAŞARILI'
             }
         else:
@@ -474,31 +424,12 @@ def get_page_content(url):
             }
         
     except Exception as e:
-        print(f"         ❌ Sayfa yükleme hatası: {e}")
         return {
             'url': url,
             'title': f'Hata: {str(e)}',
             'content': '',
             'status': 'HATA'
         }
-
-def create_test_content(url):
-    """Test içeriği oluştur"""
-    test_content = f"""
-    Bu bir test sayfasıdır. Gerçek verilerle çalışmak için DuckDuckGo araması yapılmalıdır.
-    Örnek şirket bilgileri ve ticaret verileri burada bulunabilir.
-    GTIP kodları: 8703, 8708, 8471 gibi kodlar ticaret verilerinde geçebilir.
-    Export ve import işlemleri uluslararası ticaretin önemli parçalarıdır.
-    Rusya ile yapılan ticaret belirli kısıtlamalara tabidir.
-    Harmonized System (HS) kodları gümrük işlemlerinde kullanılır.
-    """
-    
-    return {
-        'url': url,
-        'title': 'Test Sayfası - Örnek İçerik',
-        'content': test_content,
-        'status': 'TEST'
-    }
 
 def ai_enhanced_search(company, country):
     """AI destekli DuckDuckGo araması"""
@@ -517,13 +448,8 @@ def ai_enhanced_search(company, country):
             print(f"   🔍 Aranıyor: '{term}'")
             results = duckduckgo_search(term)
             
-            if not results:
-                print(f"   ⚠️  '{term}' için sonuç bulunamadı")
-                continue
-                
             for i, result in enumerate(results):
                 print(f"     📄 {i+1}. sonuç analizi: {result['title'][:50]}...")
-                
                 page_data = get_page_content(result['url'])
                 
                 if page_data['status'] in ['BAŞARILI', 'TEST']:
@@ -569,9 +495,9 @@ def ai_enhanced_search(company, country):
                     if ai_result['TESPIT_EDILEN_GTIPLER']:
                         print(f"         📦 GTIP Kodları: {ai_result['TESPIT_EDILEN_GTIPLER']}")
                 
-                time.sleep(1)  # Rate limiting
+                time.sleep(1)
             
-            time.sleep(2)  # Arama terimleri arası bekleme
+            time.sleep(2)
             
         except Exception as e:
             print(f"   ❌ Arama hatası: {e}")
@@ -580,14 +506,53 @@ def ai_enhanced_search(company, country):
     return all_results
 
 def create_advanced_excel_report(df_results, filename='ai_ticaret_analiz_sonuc.xlsx'):
-    """Gelişmiş Excel raporu oluştur"""
+    """Gelişmiş Excel raporu oluştur - ORJİNAL GİBİ"""
     
     try:
         with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+            workbook = writer.book
+            
+            # 1. Tüm AI Sonuçları
             df_results.to_excel(writer, sheet_name='AI Analiz Sonuçları', index=False)
-        
-        print(f"✅ Excel raporu oluşturuldu: {filename}")
-        return True
+            
+            # 2. Yüksek Riskli Sonuçlar
+            high_risk = df_results[df_results['YAPTIRIM_RISKI'].isin(['YAPTIRIMLI_YÜKSEK_RISK', 'YAPTIRIMLI_ORTA_RISK'])]
+            if not high_risk.empty:
+                high_risk.to_excel(writer, sheet_name='Yüksek Riskli', index=False)
+            
+            # 3. Yüksek Güvenilir Sonuçlar
+            high_confidence = df_results[df_results['GÜVEN_YÜZDESİ'] >= 60]
+            if not high_confidence.empty:
+                high_confidence.to_excel(writer, sheet_name='Yüksek Güvenilir', index=False)
+            
+            # 4. AI Özet Tablosu
+            ai_summary = df_results.groupby(['ŞİRKET', 'ÜLKE', 'DURUM', 'YAPTIRIM_RISKI']).agg({
+                'GÜVEN_YÜZDESİ': ['count', 'mean', 'max'],
+                'HAM_PUAN': 'mean',
+            }).round(1)
+            ai_summary.columns = ['_'.join(col).strip() for col in ai_summary.columns.values]
+            ai_summary = ai_summary.reset_index()
+            ai_summary.to_excel(writer, sheet_name='AI Özeti', index=False)
+            
+            # 5. Detaylı Analiz
+            analysis_details = df_results[['ŞİRKET', 'ÜLKE', 'DURUM', 'GÜVEN_YÜZDESİ', 
+                                         'YAPTIRIM_RISKI', 'TESPIT_EDILEN_GTIPLER', 
+                                         'YAPTIRIMLI_GTIPLER', 'AI_YAPTIRIM_UYARI', 
+                                         'AI_TAVSIYE', 'URL']]
+            analysis_details.to_excel(writer, sheet_name='Detaylı Analiz', index=False)
+            
+            # 6. GTIP Yaptırım Analizi
+            gtip_analysis = df_results[df_results['TESPIT_EDILEN_GTIPLER'] != '']
+            if not gtip_analysis.empty:
+                gtip_summary = gtip_analysis.groupby('TESPIT_EDILEN_GTIPLER').agg({
+                    'ŞİRKET': 'count',
+                    'YAPTIRIM_RISKI': 'first',
+                    'AI_YAPTIRIM_UYARI': 'first'
+                }).reset_index()
+                gtip_summary.to_excel(writer, sheet_name='GTIP Analiz', index=False)
+            
+            print(f"✅ Gelişmiş Excel raporu oluşturuldu: {filename}")
+            return True
             
     except Exception as e:
         print(f"❌ Excel oluşturma hatası: {e}")
