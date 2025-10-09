@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file, render_template
+from flask import Flask, request, jsonify, send_file, render_template_string
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
@@ -460,15 +460,141 @@ def create_excel_report(df_results, filename):
         print(f"Excel oluşturma hatası: {e}")
         return False
 
+# HTML Template
+HTML_TEMPLATE = '''
+<!DOCTYPE html>
+<html>
+<head>
+    <title>🚀 AI Ticaret Analiz Sistemi</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .form-group { margin: 20px 0; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; color: #333; }
+        input[type="text"] { width: 100%; padding: 12px; font-size: 16px; border: 2px solid #ddd; border-radius: 5px; box-sizing: border-box; }
+        input[type="text"]:focus { border-color: #007bff; outline: none; }
+        button { background: #007bff; color: white; padding: 12px 30px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; width: 100%; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        .loading { display: none; color: #007bff; text-align: center; margin: 20px 0; }
+        .result { margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 5px; border-left: 4px solid #007bff; }
+        .success { background: #d4edda; border-color: #28a745; }
+        .error { background: #f8d7da; border-color: #dc3545; }
+        .info { background: #d1ecf1; border-color: #17a2b8; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 AI Ticaret ve Yaptırım Analiz Sistemi</h1>
+        <p>Şirket ve hedef ülke bilgilerini girerek ticaret analizi yapın.</p>
+        
+        <form id="analysisForm">
+            <div class="form-group">
+                <label for="company">Şirket Adı:</label>
+                <input type="text" id="company" name="company" required placeholder="Örnek: ABC Otomotiv Sanayi">
+            </div>
+            
+            <div class="form-group">
+                <label for="country">Hedef Ülke:</label>
+                <input type="text" id="country" name="country" required placeholder="Örnek: Rusya">
+            </div>
+            
+            <button type="submit" id="analyzeBtn">🔍 Analiz Başlat</button>
+        </form>
+        
+        <div id="loading" class="loading">
+            <h3>⏳ AI analiz yapılıyor, lütfen bekleyin...</h3>
+            <p>Bu işlem 1-2 dakika sürebilir.</p>
+        </div>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        document.getElementById('analysisForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const company = document.getElementById('company').value;
+            const country = document.getElementById('country').value;
+            const loading = document.getElementById('loading');
+            const result = document.getElementById('result');
+            const analyzeBtn = document.getElementById('analyzeBtn');
+            
+            // Butonu devre dışı bırak
+            analyzeBtn.disabled = true;
+            analyzeBtn.textContent = '⏳ Analiz Yapılıyor...';
+            loading.style.display = 'block';
+            result.innerHTML = '';
+            
+            try {
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        company: company,
+                        country: country 
+                    })
+                });
+                
+                const data = await response.json();
+                
+                loading.style.display = 'none';
+                analyzeBtn.disabled = false;
+                analyzeBtn.textContent = '🔍 Analiz Başlat';
+                
+                if (data.success) {
+                    result.innerHTML = `
+                        <div class="result success">
+                            <h3>✅ Analiz Tamamlandı!</h3>
+                            <p><strong>Şirket:</strong> ${data.company}</p>
+                            <p><strong>Ülke:</strong> ${data.country}</p>
+                            <p><strong>Toplam Sonuç:</strong> ${data.total_results}</p>
+                            <a href="/download/${data.filename}" style="background: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 10px;">
+                                📊 Excel Raporunu İndir
+                            </a>
+                        </div>
+                    `;
+                } else {
+                    result.innerHTML = `
+                        <div class="result error">
+                            <h3>❌ Hata!</h3>
+                            <p>${data.error}</p>
+                        </div>
+                    `;
+                }
+                
+            } catch (error) {
+                loading.style.display = 'none';
+                analyzeBtn.disabled = false;
+                analyzeBtn.textContent = '🔍 Analiz Başlat';
+                result.innerHTML = `
+                    <div class="result error">
+                        <h3>❌ İstek Hatası!</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        });
+    </script>
+</body>
+</html>
+'''
+
 # Flask Routes
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template_string(HTML_TEMPLATE)
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
     try:
+        # JSON verisini al
         data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'JSON verisi alınamadı'})
+        
         company = data.get('company', '').strip()
         country = data.get('country', '').strip()
         
