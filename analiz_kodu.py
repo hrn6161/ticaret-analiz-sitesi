@@ -5,183 +5,91 @@ import time
 from datetime import datetime
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
-from bs4 import BeautifulSoup
-import random
 
-print("🚀 ARAMA MOTORU ANALİZ SİSTEMİ BAŞLATILIYOR...")
+print("🚀 DUCKDUCKGO İLE GERÇEK ARAMA SİSTEMİ")
 
-class SearchEngineAnalyzer:
+class DuckDuckGoAnalyzer:
     def __init__(self):
-        self.user_agents = [
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'
-        ]
+        self.endpoint = "https://api.duckduckgo.com/"
     
-    def search_google(self, company, country):
-        """Google'da arama yap"""
+    def search_with_duckduckgo(self, company, country):
+        """DuckDuckGo API ile arama yap"""
         all_results = []
         
         search_terms = [
             f"{company} {country} export",
-            f"{company} {country} business Russia", 
-            f"{company} Russia trade",
-            f"{company} {country} sanctions"
+            f"{company} Russia business",
+            f"{company} {country} trade sanctions"
         ]
         
         for term in search_terms:
             try:
-                print(f"🔍 Google'da aranıyor: '{term}'")
+                print(f"🔍 DuckDuckGo ile aranıyor: '{term}'")
                 
-                headers = {
-                    'User-Agent': random.choice(self.user_agents),
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                    'Accept-Language': 'en-US,en;q=0.5',
-                    'Accept-Encoding': 'gzip, deflate',
-                    'Connection': 'keep-alive',
+                params = {
+                    'q': term,
+                    'format': 'json',
+                    'no_html': '1',
+                    'skip_disambig': '1'
                 }
                 
-                url = f"https://www.google.com/search?q={term.replace(' ', '+')}&num=10"
-                response = requests.get(url, headers=headers, timeout=15)
+                response = requests.get(self.endpoint, params=params, timeout=20)
                 
                 if response.status_code == 200:
-                    soup = BeautifulSoup(response.text, 'html.parser')
+                    data = response.json()
                     
-                    # Google arama sonuçlarını al
-                    results = soup.find_all('div', class_='g')[:5]
+                    # Ana sonuç
+                    abstract = data.get('Abstract', '')
+                    abstract_url = data.get('AbstractURL', '')
+                    abstract_text = data.get('AbstractText', '')
                     
-                    for i, result in enumerate(results):
+                    if abstract:
+                        print(f"   📄 Ana sonuç: {abstract[:50]}...")
+                        
+                        full_text = f"{abstract} {abstract_text}"
+                        analysis = self.analyze_content(company, country, full_text)
+                        analysis.update({
+                            'URL': abstract_url,
+                            'BAŞLIK': abstract[:100],
+                            'İÇERİK_ÖZETİ': abstract_text[:200] + '...',
+                            'ARAMA_TERİMİ': term,
+                            'KAYNAK': 'DuckDuckGo'
+                        })
+                        all_results.append(analysis)
+                        print(f"     ✅ {analysis['DURUM']} - %{analysis['GÜVEN_YÜZDESİ']:.1f}")
+                    
+                    # İlgili konular
+                    related_topics = data.get('RelatedTopics', [])
+                    for i, topic in enumerate(related_topics[:4]):
                         try:
-                            title_elem = result.find('h3')
-                            link_elem = result.find('a')
-                            
-                            if title_elem and link_elem:
-                                title = title_elem.get_text()
-                                url = link_elem['href']
+                            if 'FirstURL' in topic and 'Text' in topic:
+                                title = topic.get('Text', '')[:100]
+                                url = topic.get('FirstURL', '')
                                 
-                                # URL'yi temizle
-                                if url.startswith('/url?q='):
-                                    url = url.split('/url?q=')[1].split('&')[0]
+                                print(f"   📄 İlgili konu {i+1}: {title[:50]}...")
                                 
-                                print(f"   📄 {i+1}. {title[:50]}...")
+                                analysis = self.analyze_content(company, country, title)
+                                analysis.update({
+                                    'URL': url,
+                                    'BAŞLIK': title,
+                                    'İÇERİK_ÖZETİ': title[:200] + '...',
+                                    'ARAMA_TERİMİ': term,
+                                    'KAYNAK': 'DuckDuckGo Related'
+                                })
+                                all_results.append(analysis)
+                                print(f"     ✅ {analysis['DURUM']} - %{analysis['GÜVEN_YÜZDESİ']:.1f}")
                                 
-                                # Sayfa içeriğini al
-                                page_content = self.get_page_content(url, headers)
-                                
-                                if page_content:
-                                    # Analiz yap
-                                    analysis = self.analyze_content(company, country, title + " " + page_content)
-                                    analysis.update({
-                                        'URL': url,
-                                        'BAŞLIK': title,
-                                        'İÇERİK_ÖZETİ': page_content[:200] + '...',
-                                        'ARAMA_TERİMİ': term,
-                                        'ARAMA_MOTORU': 'Google'
-                                    })
-                                    all_results.append(analysis)
-                                    print(f"     ✅ {analysis['DURUM']} - %{analysis['GÜVEN_YÜZDESİ']:.1f}")
-                                    
                         except Exception as e:
-                            print(f"     ❌ Sonuç işleme hatası: {e}")
+                            print(f"     ❌ Konu işleme hatası: {e}")
                             continue
                 
-                time.sleep(2)  # Rate limiting
+                time.sleep(1)
                 
             except Exception as e:
-                print(f"❌ Arama hatası: {e}")
+                print(f"❌ DuckDuckGo hatası: {e}")
                 continue
         
         return all_results
-    
-    def search_bing(self, company, country):
-        """Bing'de arama yap"""
-        all_results = []
-        
-        search_terms = [
-            f"{company} {country} export",
-            f"{company} Russia business"
-        ]
-        
-        for term in search_terms:
-            try:
-                print(f"🔍 Bing'de aranıyor: '{term}'")
-                
-                headers = {
-                    'User-Agent': random.choice(self.user_agents),
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                }
-                
-                url = f"https://www.bing.com/search?q={term.replace(' ', '+')}&count=10"
-                response = requests.get(url, headers=headers, timeout=15)
-                
-                if response.status_code == 200:
-                    soup = BeautifulSoup(response.text, 'html.parser')
-                    
-                    # Bing arama sonuçlarını al
-                    results = soup.find_all('li', class_='b_algo')[:5]
-                    
-                    for i, result in enumerate(results):
-                        try:
-                            title_elem = result.find('h2')
-                            link_elem = result.find('a')
-                            
-                            if title_elem and link_elem:
-                                title = title_elem.get_text()
-                                url = link_elem['href']
-                                
-                                print(f"   📄 {i+1}. {title[:50]}...")
-                                
-                                # Sayfa içeriğini al
-                                page_content = self.get_page_content(url, headers)
-                                
-                                if page_content:
-                                    # Analiz yap
-                                    analysis = self.analyze_content(company, country, title + " " + page_content)
-                                    analysis.update({
-                                        'URL': url,
-                                        'BAŞLIK': title,
-                                        'İÇERİK_ÖZETİ': page_content[:200] + '...',
-                                        'ARAMA_TERİMİ': term,
-                                        'ARAMA_MOTORU': 'Bing'
-                                    })
-                                    all_results.append(analysis)
-                                    print(f"     ✅ {analysis['DURUM']} - %{analysis['GÜVEN_YÜZDESİ']:.1f}")
-                                    
-                        except Exception as e:
-                            print(f"     ❌ Sonuç işleme hatası: {e}")
-                            continue
-                
-                time.sleep(2)  # Rate limiting
-                
-            except Exception as e:
-                print(f"❌ Arama hatası: {e}")
-                continue
-        
-        return all_results
-    
-    def get_page_content(self, url, headers):
-        """Web sayfası içeriğini al"""
-        try:
-            response = requests.get(url, headers=headers, timeout=10)
-            if response.status_code == 200:
-                soup = BeautifulSoup(response.text, 'html.parser')
-                
-                # Script ve style tag'lerini temizle
-                for script in soup(["script", "style"]):
-                    script.decompose()
-                
-                text = soup.get_text()
-                # Fazla boşlukları temizle
-                lines = (line.strip() for line in text.splitlines())
-                chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-                text = ' '.join(chunk for chunk in chunks if chunk)
-                
-                return text[:2500]  # İlk 2500 karakter
-                
-        except Exception as e:
-            print(f"   ❌ Sayfa okuma hatası: {e}")
-        
-        return None
     
     def analyze_content(self, company, country, text):
         """İçeriği analiz et"""
@@ -278,7 +186,7 @@ class SearchEngineAnalyzer:
             
             # İçerik uzunluğu
             word_count = len(text_lower.split())
-            if word_count > 300:
+            if word_count > 100:
                 score += 5
                 confidence_factors.append("Detaylı içerik")
             
@@ -311,7 +219,7 @@ class SearchEngineAnalyzer:
                 'AI_NEDENLER': ' | '.join(reasons),
                 'AI_GÜVEN_FAKTÖRLERİ': ' | '.join(confidence_factors),
                 'AI_ANAHTAR_KELİMELER': ', '.join(keywords_found),
-                'AI_ANALİZ_TİPİ': 'Arama Motoru Analizi',
+                'AI_ANALİZ_TİPİ': 'DuckDuckGo Arama Analizi',
                 'METİN_UZUNLUĞU': word_count,
                 'YAPTIRIM_RISKI': yaptirim_risk,
                 'TESPIT_EDILEN_GTIPLER': ', '.join(gtip_codes),
@@ -352,46 +260,40 @@ class SearchEngineAnalyzer:
         
         return list(main_codes)[:5]
 
-def run_search_engine_analysis(company_name, country):
-    """Arama motoru analizi çalıştır"""
-    print(f"🎯 ARAMA MOTORU ANALİZİ: {company_name} - {country}")
+def run_duckduckgo_analysis(company_name, country):
+    """DuckDuckGo analizi çalıştır"""
+    print(f"🎯 DUCKDUCKGO ANALİZİ: {company_name} - {country}")
     
-    analyzer = SearchEngineAnalyzer()
+    analyzer = DuckDuckGoAnalyzer()
+    results = analyzer.search_with_duckduckgo(company_name, country)
     
-    # Hem Google hem Bing'de ara
-    google_results = analyzer.search_google(company_name, country)
-    bing_results = analyzer.search_bing(company_name, country)
-    
-    all_results = google_results + bing_results
-    
-    # Eğer sonuç yoksa, temel analiz yap
-    if not all_results:
-        print("ℹ️ Arama sonucu bulunamadı, temel analiz yapılıyor...")
+    if not results:
+        print("ℹ️ DuckDuckGo sonuç bulunamadı, temel analiz yapılıyor...")
         basic_analysis = analyzer.analyze_content(
             company_name, 
             country, 
             f"{company_name} company {country} market export trade business analysis"
         )
         basic_analysis.update({
-            'URL': 'https://www.google.com',
+            'URL': 'https://duckduckgo.com',
             'BAŞLIK': f'{company_name} Market Analysis',
-            'İÇERİK_ÖZETİ': 'Arama sonucu bulunamadı, temel analiz uygulandı',
+            'İÇERİK_ÖZETİ': 'DuckDuckGo sonuç bulunamadı, temel analiz uygulandı',
             'ARAMA_TERİMİ': 'basic analysis',
-            'ARAMA_MOTORU': 'Temel Analiz'
+            'KAYNAK': 'Temel Analiz'
         })
-        all_results = [basic_analysis]
+        results = [basic_analysis]
     
-    print(f"✅ ARAMA MOTORU ANALİZİ TAMAMLANDI: {len(all_results)} sonuç")
-    return all_results
+    print(f"✅ DUCKDUCKGO ANALİZİ TAMAMLANDI: {len(results)} sonuç")
+    return results
 
-def create_excel_report(results, filename='arama_analiz.xlsx'):
+def create_excel_report(results, filename='duckduckgo_analiz.xlsx'):
     """Excel raporu oluştur"""
     try:
         df = pd.DataFrame(results)
         
         with pd.ExcelWriter(filename, engine='openpyxl') as writer:
             # Ana sonuçlar
-            df.to_excel(writer, sheet_name='Arama Analiz Sonuçları', index=False)
+            df.to_excel(writer, sheet_name='DuckDuckGo Analiz Sonuçları', index=False)
             
             # Yüksek riskliler
             high_risk = df[df['YAPTIRIM_RISKI'] == 'YÜKSEK_RİSK']
@@ -407,8 +309,7 @@ def create_excel_report(results, filename='arama_analiz.xlsx'):
                     'ORTALAMA_GÜVEN': round(df['GÜVEN_YÜZDESİ'].mean(), 1),
                     'MAX_GÜVEN': round(df['GÜVEN_YÜZDESİ'].max(), 1),
                     'YÜKSEK_RİSK_SAYISI': len(high_risk),
-                    'GOOGLE_SONUÇ': len([r for r in results if r.get('ARAMA_MOTORU') == 'Google']),
-                    'BING_SONUÇ': len([r for r in results if r.get('ARAMA_MOTORU') == 'Bing']),
+                    'KAYNAK': 'DuckDuckGo API',
                     'ANALİZ_TARİHİ': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 }]
                 pd.DataFrame(summary_data).to_excel(writer, sheet_name='Özet', index=False)
@@ -422,6 +323,6 @@ def create_excel_report(results, filename='arama_analiz.xlsx'):
 
 # Test
 if __name__ == "__main__":
-    results = run_search_engine_analysis("Toyota", "Russia")
+    results = run_duckduckgo_analysis("Toyota", "Russia")
     create_excel_report(results)
-    print("🎉 ARAMA MOTORU ANALİZİ TAMAMLANDI!")
+    print("🎉 DUCKDUCKGO ANALİZİ TAMAMLANDI!")

@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, send_file, jsonify
 import threading
 import os
 import time
-from analiz_kodu import run_search_engine_analysis, create_excel_report
+from analiz_kodu import run_duckduckgo_analysis, create_excel_report
 
 app = Flask(__name__)
 
@@ -33,7 +33,7 @@ def analyze():
         
         return jsonify({
             'success': True,
-            'message': f'{company_name} için ARAMA MOTORU analizi başlatıldı (2-3 dakika)',
+            'message': f'{company_name} için DUCKDUCKGO analizi başlatıldı (1-2 dakika)',
             'file_id': filename
         })
         
@@ -42,7 +42,7 @@ def analyze():
 
 def run_analysis_in_thread(company_name, country, filepath):
     try:
-        results = run_search_engine_analysis(company_name, country)
+        results = run_duckduckgo_analysis(company_name, country)
         create_excel_report(results, filepath)
         print(f"✅ ANALİZ TAMAMLANDI: {filepath}")
     except Exception as e:
