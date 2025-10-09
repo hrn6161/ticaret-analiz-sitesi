@@ -722,17 +722,11 @@ class AdvancedTradeAnalyzer:
         return all_results
 
 # Flask Route'ları
+cat > app_fix.py << 'EOF'
 @app.route('/')
 def home():
-    return jsonify({
-        "status": "success", 
-        "message": "Gelişmiş DuckDuckGo ile Gerçek Zamanlı Yapay Zeka Yaptırım Analiz Sistemi",
-        "version": "1.0",
-        "endpoints": {
-            "/analyze": "POST - Şirket ve ülke analizi",
-            "/health": "GET - Sistem durumu"
-        }
-    })
+    return render_template('index.html')
+EOF
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
