@@ -820,6 +820,20 @@ def main():
             print(f"   🌐 Gerçek zamanlı AB yaptırım kontrolü aktif")
             print(f"   📊 Performans logları kaydedildi")
             
+            # Excel dosyasını açma seçeneği
+            open_excel = input("\n📂 Excel dosyasını şimdi açmak ister misiniz? (e/h): ").strip().lower()
+            if open_excel == 'e':
+                try:
+                    os.system(f'start excel "{filename}"')  # Windows
+                except:
+                    try:
+                        os.system(f'open "{filename}"')  # MacOS
+                    except:
+                        try:
+                            os.system(f'xdg-open "{filename}"')  # Linux
+                        except:
+                            print("Dosya otomatik açılamadı. Lütfen manuel olarak açın.")
+            
         else:
             print("❌ Excel raporu oluşturulamadı!")
     else:

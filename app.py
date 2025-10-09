@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, send_file
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
@@ -171,6 +171,74 @@ class SearchEngineManager:
             logging.error(f"Arama hatası: {e}")
             return []
 
+def create_advanced_excel_report(results: List[Dict], company: str, country: str) -> str:
+    """Gelişmiş Excel raporu oluştur ve dosya yolunu döndür"""
+    try:
+        # DataFrame oluştur
+        df_data = []
+        for result in results:
+            row = {
+                'ŞİRKET': result.get('ŞİRKET', ''),
+                'ÜLKE': result.get('ÜLKE', ''),
+                'DURUM': result.get('DURUM', ''),
+                'GÜVEN_YÜZDESİ': result.get('GÜVEN_YÜZDESİ', 0),
+                'YAPTIRIM_RISKI': result.get('YAPTIRIM_RISKI', ''),
+                'TESPIT_EDILEN_GTIPLER': result.get('TESPIT_EDILEN_GTIPLER', ''),
+                'AI_AÇIKLAMA': result.get('AI_AÇIKLAMA', ''),
+                'AI_NEDENLER': result.get('AI_NEDENLER', ''),
+                'AI_TAVSIYE': result.get('AI_TAVSIYE', ''),
+                'ARAMA_SORGUSU': result.get('ARAMA_SORGUSU', ''),
+                'BAŞLIK': result.get('BAŞLIK', ''),
+                'URL': result.get('URL', '')
+            }
+            df_data.append(row)
+        
+        df_results = pd.DataFrame(df_data)
+        
+        # Excel dosyası oluştur
+        filename = f"{company.replace(' ', '_')}_{country}_analiz.xlsx"
+        filepath = os.path.join('/tmp', filename)  # Render'da /tmp kullanıyoruz
+        
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "AI Analiz Sonuçları"
+        
+        # Başlıklar
+        headers = [
+            'ŞİRKET', 'ÜLKE', 'DURUM', 'GÜVEN_YÜZDESİ', 'YAPTIRIM_RISKI',
+            'TESPIT_EDILEN_GTIPLER', 'AI_AÇIKLAMA', 'AI_NEDENLER', 
+            'AI_TAVSIYE', 'ARAMA_SORGUSU', 'BAŞLIK', 'URL'
+        ]
+        
+        for col, header in enumerate(headers, 1):
+            ws.cell(row=1, column=col, value=header).font = Font(bold=True)
+        
+        # Veriler
+        for row, result in enumerate(df_results.to_dict('records'), 2):
+            for col, header in enumerate(headers, 1):
+                ws.cell(row=row, column=col, value=str(result.get(header, '')))
+        
+        # Otomatik genişlik ayarı
+        for column in ws.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column_letter].width = adjusted_width
+        
+        wb.save(filepath)
+        logging.info(f"Excel raporu oluşturuldu: {filepath}")
+        return filepath
+        
+    except Exception as e:
+        logging.error(f"Excel rapor oluşturma hatası: {e}")
+        return None
+
 # Flask Route'ları
 @app.route('/')
 def home():
@@ -207,26 +275,61 @@ def analyze():
             analysis_text = f"{result['title']} {result['snippet']}"
             ai_analysis = ai_analyzer.smart_ai_analysis(analysis_text, company, country)
             
-            analyzed_results.append({
-                'search_result': {
-                    'title': result['title'],
-                    'snippet': result['snippet'],
-                    'url': result['url']
-                },
-                'ai_analysis': ai_analysis
-            })
+            combined_result = {
+                'ŞİRKET': company,
+                'ÜLKE': country,
+                'ARAMA_SORGUSU': query,
+                'BAŞLIK': result['title'],
+                'URL': result['url'],
+                'ÖZET': result['snippet'],
+                **ai_analysis
+            }
+            
+            analyzed_results.append(combined_result)
         
-        return jsonify({
+        # Excel raporu oluştur
+        excel_filepath = create_advanced_excel_report(analyzed_results, company, country)
+        
+        response_data = {
             "success": True,
             "company": company,
             "country": country,
             "total_results": len(analyzed_results),
-            "analysis": analyzed_results
-        })
+            "analysis": analyzed_results,
+            "excel_download_url": f"/download-excel?company={company}&country={country}" if excel_filepath else None
+        }
+        
+        return jsonify(response_data)
         
     except Exception as e:
         logging.error(f"Analiz hatası: {e}")
         return jsonify({"error": f"Sunucu hatası: {str(e)}"}), 500
+
+@app.route('/download-excel')
+def download_excel():
+    try:
+        company = request.args.get('company', '')
+        country = request.args.get('country', '')
+        
+        if not company or not country:
+            return jsonify({"error": "Şirket ve ülke bilgisi gereklidir"}), 400
+        
+        filename = f"{company.replace(' ', '_')}_{country}_analiz.xlsx"
+        filepath = os.path.join('/tmp', filename)
+        
+        if os.path.exists(filepath):
+            return send_file(
+                filepath,
+                as_attachment=True,
+                download_name=filename,
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+        else:
+            return jsonify({"error": "Excel dosyası bulunamadı"}), 404
+            
+    except Exception as e:
+        logging.error(f"Excel indirme hatası: {e}")
+        return jsonify({"error": f"İndirme hatası: {str(e)}"}), 500
 
 @app.route('/health')
 def health():
