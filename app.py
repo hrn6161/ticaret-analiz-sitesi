@@ -121,8 +121,6 @@ class EUSanctionsAPI:
         
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
-            
-            # Sayfadaki tüm metni al
             text_content = soup.get_text()
             
             # GTIP kodlarını çıkar (gelişmiş regex)
@@ -130,55 +128,35 @@ class EUSanctionsAPI:
                 r'\b(?:GTIP|HS|tariff)\s*(?:code|number)?\s*[:]?\s*(\d{4})[\s\.]*(\d{0,4})',
                 r'\bCN\s*codes?\s*[:]?\s*(\d{4})[\s\.]*(\d{0,4})',
                 r'\b(?:ex\s+)?\b(\d{4})\s*\.\s*(\d{0,4})\b',
-                r'\b(?:heading|code)\s+(\d{4})[\s\.]*(\d{0,4})',
-                r'\b(\d{4})[\s\.]*(\d{0,4})(?:\s*(?:of|and|or)\s*(?:\d{4}[\s\.]*\d{0,4}))*',
             ]
             
             for pattern in gtip_patterns:
                 matches = re.finditer(pattern, text_content, re.IGNORECASE)
                 for match in matches:
-                    main_code = match.group(1)  # İlk 4 hane
+                    main_code = match.group(1)
                     sub_code = match.group(2) if match.group(2) else ""
                     
                     if main_code.isdigit():
                         full_code = f"{main_code}.{sub_code}" if sub_code else main_code
-                        product_desc = self.extract_product_description(text_content, match.start(), match.end())
-                        
                         sanctions_data[main_code] = {
                             'full_code': full_code,
-                            'description': product_desc,
+                            'description': "Yasaklı ürün kategorisi",
                             'risk_level': 'YÜKSEK_RISK',
                             'source': 'AB_YAPTIRIM_LISTESI',
                             'confidence': 'YÜKSEK'
                         }
             
-            # Ek olarak yasaklı ürün kategorilerini ara
+            # Yasaklı ürün kategorilerini ara
             prohibited_products = [
-                # Taşıtlar ve parçaları
-                'tractor', 'vehicle', 'automobile', 'motor vehicle', 'car', 'truck',
+                'tractor', 'vehicle', 'automobile', 'car', 'truck',
                 'aircraft', 'airplane', 'helicopter', 'drones?',
-                'engine', 'motor', 'chassis',
-                
-                # Silah ve savunma
-                'weapon', 'firearm', 'armament', 'military', 'defence', 'war',
-                'missile', 'bomb', 'torpedo', 'explosive',
-                
-                # Teknoloji
-                'computer', 'electronic', 'semiconductor', 'integrated circuit',
-                'radar', 'navigation', 'communication', 'telecom',
-                'encryption', 'crypto',
-                
-                # Enerji
-                'oil', 'gas', 'petroleum', 'refining',
-                'nuclear', 'uranium', 'plutonium',
-                
-                # Çift kullanımlı mallar
-                'dual.use', 'dual use', 'dual-purpose'
+                'engine', 'motor', 'weapon', 'firearm', 'military',
+                'missile', 'computer', 'electronic', 'semiconductor',
+                'radar', 'communication', 'nuclear', 'dual.use'
             ]
             
             for product in prohibited_products:
                 if re.search(product, text_content, re.IGNORECASE):
-                    # Bu ürünle ilişkili GTIP kodlarını bul
                     related_codes = self.find_related_gtip_codes(product)
                     for code in related_codes:
                         sanctions_data[code] = {
@@ -195,24 +173,6 @@ class EUSanctionsAPI:
             logging.error(f"AB sayfası parse hatası: {e}")
         
         return sanctions_data
-    
-    def extract_product_description(self, text: str, start_pos: int, end_pos: int) -> str:
-        """GTIP kodu etrafındaki ürün açıklamasını çıkar"""
-        try:
-            # GTIP kodu etrafındaki 200 karakterlik bölümü al
-            context_start = max(0, start_pos - 100)
-            context_end = min(len(text), end_pos + 100)
-            context = text[context_start:context_end]
-            
-            # Cümleleri bul
-            sentences = re.split(r'[.!?]', context)
-            for sentence in sentences:
-                if re.search(r'\b(?:prohibited|banned|restricted|sanction|forbidden)\b', sentence, re.IGNORECASE):
-                    return sentence.strip()[:100] + "..."
-            
-            return "Yasaklı ürün kategorisi"
-        except:
-            return "Yasaklı ürün"
     
     def find_related_gtip_codes(self, product_keyword: str) -> List[str]:
         """Ürün anahtar kelimesine göre ilişkili GTIP kodlarını bul"""
@@ -254,15 +214,9 @@ class EUSanctionsAPI:
             '8702': {'full_code': '8702', 'description': 'Motorlu taşıtlar', 'risk_level': 'YÜKSEK_RISK', 'source': 'BACKUP', 'confidence': 'YÜKSEK'},
             '8703': {'full_code': '8703', 'description': 'Otomobiller', 'risk_level': 'YÜKSEK_RISK', 'source': 'BACKUP', 'confidence': 'YÜKSEK'},
             '8704': {'full_code': '8704', 'description': 'Kamyonlar', 'risk_level': 'YÜKSEK_RISK', 'source': 'BACKUP', 'confidence': 'YÜKSEK'},
-            '8708': {'full_code': '8708', 'description': 'Taşıt parçaları', 'risk_level': 'YÜKSEK_RISK', 'source': 'BACKUP', 'confidence': 'YÜKSEK'},
             '8802': {'full_code': '8802', 'description': 'Uçaklar, helikopterler', 'risk_level': 'YÜKSEK_RISK', 'source': 'BACKUP', 'confidence': 'YÜKSEK'},
-            '8803': {'full_code': '8803', 'description': 'Uçak parçaları', 'risk_level': 'YÜKSEK_RISK', 'source': 'BACKUP', 'confidence': 'YÜKSEK'},
             '9301': {'full_code': '9301', 'description': 'Silahlar', 'risk_level': 'YÜKSEK_RISK', 'source': 'BACKUP', 'confidence': 'YÜKSEK'},
-            '9306': {'full_code': '9306', 'description': 'Bombalar, torpidolar', 'risk_level': 'YÜKSEK_RISK', 'source': 'BACKUP', 'confidence': 'YÜKSEK'},
             '8471': {'full_code': '8471', 'description': 'Bilgisayarlar', 'risk_level': 'YÜKSEK_RISK', 'source': 'BACKUP', 'confidence': 'YÜKSEK'},
-            '8526': {'full_code': '8526', 'description': 'Radar cihazları', 'risk_level': 'YÜKSEK_RISK', 'source': 'BACKUP', 'confidence': 'YÜKSEK'},
-            '8541': {'full_code': '8541', 'description': 'Yarı iletkenler', 'risk_level': 'YÜKSEK_RISK', 'source': 'BACKUP', 'confidence': 'YÜKSEK'},
-            '2844': {'full_code': '2844', 'description': 'Nükleer malzemeler', 'risk_level': 'YÜKSEK_RISK', 'source': 'BACKUP', 'confidence': 'YÜKSEK'},
         }
     
     def check_gtip_against_sanctions(self, gtip_codes: List[str]) -> Tuple[List[str], Dict]:
@@ -280,12 +234,12 @@ class EUSanctionsAPI:
                     
                     sanction_details[gtip_code] = {
                         'risk_level': "YAPTIRIMLI_YÜKSEK_RISK",
-                        'reason': f"GTIP {gtip_code} - {sanction_info['description']} (Kaynak: {sanction_info['source']})",
+                        'reason': f"GTIP {gtip_code} - {sanction_info['description']}",
                         'found_in_sanction_list': True,
                         'prohibition_confidence': 3,
                         'sanction_details': sanction_info
                     }
-                    logging.warning(f"⛔ Yaptırımlı kod bulundu: {gtip_code} - {sanction_info['description']}")
+                    logging.warning(f"⛔ Yaptırımlı kod bulundu: {gtip_code}")
                 else:
                     sanction_details[gtip_code] = {
                         'risk_level': "DÜŞÜK",
@@ -315,10 +269,6 @@ class RealTimeSanctionAnalyzer:
             r'\bHS\s?:?\s?(\d{4,8})\b',
             r'\bGTIP\s?:?\s?(\d{4,8})\b',
             r'\bH\.S\.\s?CODE?\s?:?\s?(\d{4,8})\b',
-            r'\bHarmonized System\s?Code\s?:?\s?(\d{4,8})\b',
-            r'\bCustoms\s?Code\s?:?\s?(\d{4,8})\b',
-            r'\bTariff\s?Code\s?:?\s?(\d{4,8})\b',
-            r'\bCN\s?code\s?:?\s?(\d{4,8})\b',
         ]
         
         all_codes = set()
@@ -335,18 +285,15 @@ class RealTimeSanctionAnalyzer:
                     if main_code.isdigit():
                         all_codes.add(main_code)
         
-        # Sayısal desen kontrolü - gelişmiş
+        # Sayısal desen kontrolü
         number_pattern = r'\b\d{4}\b'
         numbers = re.findall(number_pattern, text)
         
         for num in numbers:
             if num.isdigit():
                 num_int = int(num)
-                # Genişletilmiş GTIP aralıkları
                 if ((8400 <= num_int <= 8600) or (8700 <= num_int <= 8900) or 
-                    (9000 <= num_int <= 9300) or (2800 <= num_int <= 2900) or
-                    (8470 <= num_int <= 8480) or (8500 <= num_int <= 8520) or
-                    (8540 <= num_int <= 8550) or (9301 <= num_int <= 9307)):
+                    (9000 <= num_int <= 9300) or (2800 <= num_int <= 2900)):
                     all_codes.add(num)
         
         logging.info(f"Metinden çıkarılan GTIP/HS kodları: {list(all_codes)}")
@@ -452,11 +399,11 @@ class AdvancedAIAnalyzer:
                 confidence_factors.append("GTIP/HS kodları mevcut")
                 logging.info(f"GTIP/HS kodları bulundu: {gtip_codes}")
             
-            # GERÇEK ZAMANLI Yaptırım kontrolü - HER ZAMAN yapılıyor
+            # GERÇEK ZAMANLI Yaptırım kontrolü
             print("       🌐 GERÇEK ZAMANLI AB Yaptırım Listesi kontrol ediliyor...")
             sanctioned_codes, sanction_analysis = self.sanction_analyzer.check_eu_sanctions_realtime(gtip_codes)
             
-            # Diğer analiz kodları aynı...
+            # Şirket ve ülke kontrolü
             company_words = [word for word in company_lower.split() if len(word) > 3]
             company_found = any(word in text_lower for word in company_words)
             country_found = country_lower in text_lower
@@ -471,13 +418,13 @@ class AdvancedAIAnalyzer:
                 reasons.append("Ülke ismi bulundu")
                 confidence_factors.append("Hedef ülke tanımlı")
             
+            # Ticaret terimleri
             trade_indicators = {
                 'export': 15, 'import': 15, 'trade': 12, 'trading': 10, 'business': 10,
-                'partner': 12, 'market': 10, 'distributor': 15, 'supplier': 12, 'dealer': 10,
-                'agent': 8, 'cooperation': 10, 'collaboration': 8, 'shipment': 10, 'logistics': 8,
-                'customs': 8, 'foreign': 6, 'international': 8, 'overseas': 6, 'global': 6,
-                'hs code': 20, 'gtip': 20, 'harmonized system': 20, 'customs code': 15,
-                'tariff code': 15, 'trade relation': 12, 'business partner': 15
+                'partner': 12, 'market': 10, 'distributor': 15, 'supplier': 12,
+                'agent': 8, 'cooperation': 10, 'shipment': 10, 'logistics': 8,
+                'customs': 8, 'foreign': 6, 'international': 8,
+                'hs code': 20, 'gtip': 20, 'harmonized system': 20,
             }
             
             for term, points in trade_indicators.items():
@@ -486,13 +433,13 @@ class AdvancedAIAnalyzer:
                     keywords_found.append(term)
                     reasons.append(f"{term} terimi bulundu")
             
+            # Ürün tespiti
             product_keywords = {
                 'automotive': '8703', 'vehicle': '8703', 'car': '8703', 'motor': '8407',
-                'engine': '8407', 'parts': '8708', 'component': '8708', 'truck': '8704',
-                'tractor': '8701', 'computer': '8471', 'electronic': '8542', 'aircraft': '8802',
-                'weapon': '9306', 'chemical': '2844', 'signal': '8517', 'drone': '8806',
-                'missile': '9301', 'radar': '8526', 'semiconductor': '8541', 'nuclear': '2844',
-                'aviation': '8802', 'military': '9301', 'defense': '9301', 'technology': '8543'
+                'engine': '8407', 'parts': '8708', 'truck': '8704', 'tractor': '8701',
+                'computer': '8471', 'electronic': '8542', 'aircraft': '8802',
+                'weapon': '9306', 'chemical': '2844', 'drone': '8806',
+                'missile': '9301', 'radar': '8526', 'semiconductor': '8541',
             }
             
             for product, gtip in product_keywords.items():
@@ -500,16 +447,14 @@ class AdvancedAIAnalyzer:
                     detected_products.append(f"{product}({gtip})")
                     if gtip not in gtip_codes:
                         gtip_codes.append(gtip)
-                    reasons.append(f"{product} ürün kategorisi tespit edildi (GTIP/HS: {gtip})")
+                    reasons.append(f"{product} ürün kategorisi tespit edildi")
             
+            # Bağlam kontrolü
             context_phrases = [
                 f"{company_lower}.*{country_lower}",
                 f"export.*{country_lower}",
                 f"business.*{country_lower}",
                 f"partner.*{country_lower}",
-                f"market.*{country_lower}",
-                f"distributor.*{country_lower}",
-                f"supplier.*{country_lower}",
             ]
             
             context_matches = 0
@@ -522,19 +467,17 @@ class AdvancedAIAnalyzer:
                 score += 20
                 confidence_factors.append("Güçlü bağlam")
             
+            # Benzersiz terim sayısı
             unique_trade_terms = len(set(keywords_found))
             if unique_trade_terms >= 3:
                 score += 10
                 reasons.append(f"{unique_trade_terms} farklı ticaret terimi")
                 confidence_factors.append("Zengin terminoloji")
             
-            word_count = len(text_lower.split())
-            if word_count > 500:
-                score += 5
-                confidence_factors.append("Detaylı içerik")
-            
+            # Yaptırım risk analizi
             sanctions_result = self.analyze_sanctions_risk(company, country, gtip_codes, sanctioned_codes, sanction_analysis)
             
+            # Sonuç değerlendirme
             max_possible = 250
             percentage = (score / max_possible) * 100 if max_possible > 0 else 0
             
@@ -569,7 +512,7 @@ class AdvancedAIAnalyzer:
                 'AI_GÜVEN_FAKTÖRLERİ': ' | '.join(confidence_factors),
                 'AI_ANAHTAR_KELİMELER': ', '.join(keywords_found),
                 'AI_ANALİZ_TİPİ': 'Gerçek Zamanlı GTIP/HS Analizi + AB Yaptırım Kontrolü',
-                'METİN_UZUNLUĞU': word_count,
+                'METİN_UZUNLUĞU': len(text_lower.split()),
                 'BENZERLİK_ORANI': f"%{percentage:.1f}",
                 'YAPTIRIM_RISKI': sanctions_result['YAPTIRIM_RISKI'],
                 'TESPIT_EDILEN_GTIPLER': ', '.join(gtip_codes),
@@ -603,13 +546,12 @@ class AdvancedAIAnalyzer:
     
     def analyze_sanctions_risk(self, company: str, country: str, gtip_codes: List[str], 
                               sanctioned_codes: List[str], sanction_analysis: Dict) -> Dict:
-        """Gelişmiş yaptırım risk analizi - Tüm ülkeler için"""
+        """Gelişmiş yaptırım risk analizi"""
         analysis_result = {
             'YAPTIRIM_RISKI': 'DÜŞÜK', 'YAPTIRIMLI_GTIPLER': [], 'GTIP_ANALIZ_DETAY': '',
             'AI_YAPTIRIM_UYARI': '', 'AI_TAVSIYE': '', 'AB_LISTESINDE_BULUNDU': 'HAYIR'
         }
         
-        # TÜM ülkeler için AB yaptırım kontrolü yapılıyor
         if gtip_codes:
             analysis_result['AB_LISTESINDE_BULUNDU'] = 'EVET'
             
@@ -657,42 +599,197 @@ class AdvancedAIAnalyzer:
         
         return analysis_result
 
-# Flask route'ları
+class SearchEngineManager:
+    def __init__(self, config: Config):
+        self.config = config
+    
+    @ErrorHandler.handle_request_error
+    def duckduckgo_search(self, query: str, max_results: int = None) -> List[Dict]:
+        """DuckDuckGo arama fonksiyonu"""
+        if max_results is None:
+            max_results = self.config.MAX_RESULTS
+            
+        logging.info(f"DuckDuckGo'da aranıyor: {query}")
+        
+        url = "https://html.duckduckgo.com/html/"
+        headers = {
+            'User-Agent': random.choice(self.config.USER_AGENTS),
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Content-Type': 'application/x-www-form-urlencoded',
+        }
+        
+        data = {
+            'q': query,
+            'b': '',
+        }
+        
+        response = requests.post(url, headers=headers, data=data, timeout=self.config.REQUEST_TIMEOUT)
+        
+        if response.status_code == 200:
+            return self.parse_duckduckgo_results(response.text, max_results)
+        else:
+            logging.warning(f"DuckDuckGo search failed: {response.status_code}")
+            return []
+    
+    def parse_duckduckgo_results(self, html: str, max_results: int) -> List[Dict]:
+        """DuckDuckGo sonuçlarını parse et"""
+        soup = BeautifulSoup(html, 'html.parser')
+        results = []
+        
+        result_containers = soup.find_all('div', class_='result')
+        
+        for container in result_containers[:max_results]:
+            try:
+                title_elem = container.find('a', class_='result__a')
+                snippet_elem = container.find('a', class_='result__snippet')
+                url_elem = container.find('a', class_='result__url')
+                
+                if title_elem:
+                    title = title_elem.get_text(strip=True)
+                    url = title_elem.get('href', '')
+                    snippet = snippet_elem.get_text(strip=True) if snippet_elem else ""
+                    
+                    # Clean URL
+                    if url.startswith('//duckduckgo.com/l/'):
+                        match = re.search(r'uddg=([^&]+)', url)
+                        if match:
+                            url = requests.utils.unquote(match.group(1))
+                    
+                    results.append({
+                        'title': title,
+                        'url': url,
+                        'snippet': snippet
+                    })
+                    
+            except Exception as e:
+                logging.warning(f"Result parsing error: {e}")
+                continue
+        
+        logging.info(f"Parsed {len(results)} search results")
+        return results
+
+class AdvancedTradeAnalyzer:
+    def __init__(self, config: Config):
+        self.config = config
+        self.search_engine = SearchEngineManager(config)
+        self.ai_analyzer = AdvancedAIAnalyzer(config)
+    
+    def ai_enhanced_search(self, company: str, country: str) -> List[Dict]:
+        """AI destekli gelişmiş ticaret analizi"""
+        logging.info(f"🤖 AI DESTEKLİ ANALİZ: {company} ↔ {country}")
+        
+        search_queries = [
+            f"{company} export {country}",
+            f"{company} {country} business",
+            f"{company} {country} trade",
+            f"{company} {country} distributor",
+            f"{company} {country} supplier",
+            f"{company} {country} partner",
+            f"{company} {country} HS code",
+            f"{company} {country} GTIP",
+        ]
+        
+        all_results = []
+        
+        for query in search_queries:
+            try:
+                logging.info(f"🔍 Arama: {query}")
+                search_results = self.search_engine.duckduckgo_search(query)
+                
+                for result in search_results:
+                    analysis_text = f"{result['title']} {result['snippet']}"
+                    ai_analysis = self.ai_analyzer.smart_ai_analysis(analysis_text, company, country)
+                    
+                    combined_result = {
+                        'ŞİRKET': company,
+                        'ÜLKE': country,
+                        'ARAMA_SORGUSU': query,
+                        'BAŞLIK': result['title'],
+                        'URL': result['url'],
+                        'ÖZET': result['snippet'],
+                        **ai_analysis
+                    }
+                    
+                    all_results.append(combined_result)
+                
+                time.sleep(self.config.DELAY_BETWEEN_SEARCHES)
+                
+            except Exception as e:
+                logging.error(f"Search query error for '{query}': {e}")
+                continue
+        
+        return all_results
+
+# Flask Route'ları
 @app.route('/')
 def home():
-    return render_template('index.html')
+    return jsonify({
+        "status": "success", 
+        "message": "Gelişmiş DuckDuckGo ile Gerçek Zamanlı Yapay Zeka Yaptırım Analiz Sistemi",
+        "version": "1.0",
+        "endpoints": {
+            "/analyze": "POST - Şirket ve ülke analizi",
+            "/health": "GET - Sistem durumu"
+        }
+    })
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
     try:
         data = request.get_json()
-        company = data.get('company', '')
-        country = data.get('country', '')
+        
+        if not data:
+            return jsonify({"error": "JSON verisi bekleniyor"}), 400
+        
+        company = data.get('company', '').strip()
+        country = data.get('country', '').strip()
         
         if not company or not country:
-            return jsonify({'error': 'Şirket ve ülke bilgisi gereklidir!'}), 400
+            return jsonify({"error": "Şirket ve ülke bilgisi gereklidir"}), 400
         
-        # Basit analiz simülasyonu
+        logging.info(f"Analiz başlatılıyor: {company} - {country}")
+        
+        # Yapılandırma ve analiz
         config = Config()
-        analyzer = AdvancedAIAnalyzer(config)
+        analyzer = AdvancedTradeAnalyzer(config)
         
-        # Örnek analiz sonucu
-        sample_text = f"{company} company exports products to {country} with HS codes 8703, 8471"
-        result = analyzer.smart_ai_analysis(sample_text, company, country)
+        # AI analizi yap
+        results = analyzer.ai_enhanced_search(company, country)
         
-        return jsonify({
-            'success': True,
-            'company': company,
-            'country': country,
-            'analysis': result
-        })
+        if results:
+            # Performans özeti
+            metrics = analyzer.ai_analyzer.monitor.get_summary()
+            
+            return jsonify({
+                "success": True,
+                "company": company,
+                "country": country,
+                "total_results": len(results),
+                "analysis": results,
+                "performance_metrics": {
+                    "total_analysis": len(results),
+                    "execution_time": f"{metrics['execution_time']:.2f}s",
+                    "pages_analyzed": metrics['pages_analyzed'],
+                    "errors_encountered": metrics['errors_encountered']
+                }
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "message": "Analiz sonucu bulunamadı",
+                "company": company,
+                "country": country
+            })
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logging.error(f"Analiz hatası: {e}")
+        return jsonify({"error": f"Sunucu hatası: {str(e)}"}), 500
 
 @app.route('/health')
 def health():
-    return jsonify({'status': 'healthy', 'timestamp': datetime.now().isoformat()})
+    return jsonify({"status": "healthy", "timestamp": datetime.now().isoformat()})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
