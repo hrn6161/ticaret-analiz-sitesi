@@ -46,9 +46,16 @@
             cursor: pointer;
             font-size: 16px;
             width: 100%;
+            margin: 5px 0;
         }
         button:hover {
             background: #2980b9;
+        }
+        .btn-excel {
+            background: #27ae60;
+        }
+        .btn-excel:hover {
+            background: #219a52;
         }
         .result {
             margin-top: 20px;
@@ -70,6 +77,20 @@
             display: none;
             text-align: center;
             margin: 20px 0;
+        }
+        .download-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #e8f4fd;
+            border-radius: 5px;
+            display: none;
+        }
+        .analysis-item {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            background: #f9f9f9;
         }
     </style>
 </head>
@@ -97,20 +118,31 @@
         </div>
 
         <div id="result" class="result"></div>
+
+        <div id="downloadSection" class="download-section">
+            <h3>📊 Excel Raporu</h3>
+            <p>Analiz sonuçlarını Excel formatında indirebilirsiniz:</p>
+            <button id="downloadExcel" class="btn-excel">📥 Excel İndir</button>
+        </div>
     </div>
 
     <script>
+        let currentCompany = '';
+        let currentCountry = '';
+
         document.getElementById('analysisForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            const company = document.getElementById('company').value;
-            const country = document.getElementById('country').value;
+            currentCompany = document.getElementById('company').value;
+            currentCountry = document.getElementById('country').value;
             const loading = document.getElementById('loading');
             const resultDiv = document.getElementById('result');
+            const downloadSection = document.getElementById('downloadSection');
             
             // Loading göster
             loading.style.display = 'block';
             resultDiv.style.display = 'none';
+            downloadSection.style.display = 'none';
             
             try {
                 const response = await fetch('/analyze', {
@@ -119,8 +151,8 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        company: company,
-                        country: country
+                        company: currentCompany,
+                        country: currentCountry
                     })
                 });
                 
@@ -131,8 +163,8 @@
                 resultDiv.style.display = 'block';
                 
                 if (data.success) {
-                    let html = '<div class="success">';
-                    html += `<h3>✅ Analiz Tamamlandı</h3>`;
+                    resultDiv.className = 'result success';
+                    let html = '<h3>✅ Analiz Tamamlandı</h3>';
                     html += `<p><strong>Şirket:</strong> ${data.company}</p>`;
                     html += `<p><strong>Ülke:</strong> ${data.country}</p>`;
                     html += `<p><strong>Toplam Sonuç:</strong> ${data.total_results}</p>`;
@@ -140,22 +172,34 @@
                     if (data.analysis && data.analysis.length > 0) {
                         html += '<h4>📊 Analiz Sonuçları:</h4>';
                         data.analysis.forEach((item, index) => {
-                            html += `<div style="border: 1px solid #ccc; padding: 10px; margin: 10px 0; border-radius: 5px;">`;
-                            html += `<p><strong>${index + 1}. ${item.search_result.title}</strong></p>`;
-                            html += `<p>${item.search_result.snippet}</p>`;
-                            html += `<p><strong>Durum:</strong> ${item.ai_analysis.DURUM}</p>`;
-                            html += `<p><strong>Güven:</strong> ${item.ai_analysis.GÜVEN_YÜZDESİ}%</p>`;
-                            html += `<p><strong>Yaptırım Riski:</strong> ${item.ai_analysis.YAPTIRIM_RISKI}</p>`;
-                            html += `<p><strong>Açıklama:</strong> ${item.ai_analysis.AI_AÇIKLAMA}</p>`;
+                            html += `<div class="analysis-item">`;
+                            html += `<p><strong>${index + 1}. ${item.BAŞLIK || 'Başlık Yok'}</strong></p>`;
+                            html += `<p><em>${item.ÖZET || 'Özet Yok'}</em></p>`;
+                            html += `<p><strong>Durum:</strong> ${item.DURUM || 'Belirsiz'}</p>`;
+                            html += `<p><strong>Güven:</strong> ${item.GÜVEN_YÜZDESİ || 0}%</p>`;
+                            html += `<p><strong>Yaptırım Riski:</strong> ${item.YAPTIRIM_RISKI || 'Düşük'}</p>`;
+                            html += `<p><strong>Açıklama:</strong> ${item.AI_AÇIKLAMA || 'Açıklama yok'}</p>`;
+                            if (item.TESPIT_EDILEN_GTIPLER) {
+                                html += `<p><strong>GTIP Kodları:</strong> ${item.TESPIT_EDILEN_GTIPLER}</p>`;
+                            }
+                            if (item.AI_TAVSIYE) {
+                                html += `<p><strong>Tavsiye:</strong> ${item.AI_TAVSIYE}</p>`;
+                            }
                             html += `</div>`;
                         });
+                    } else {
+                        html += '<p>Analiz sonucu bulunamadı.</p>';
                     }
                     
-                    html += '</div>';
                     resultDiv.innerHTML = html;
+                    
+                    // Excel indirme bölümünü göster
+                    if (data.excel_download_url) {
+                        downloadSection.style.display = 'block';
+                    }
                 } else {
                     resultDiv.className = 'result error';
-                    resultDiv.innerHTML = `<h3>❌ Hata</h3><p>${data.message || data.error}</p>`;
+                    resultDiv.innerHTML = `<h3>❌ Hata</h3><p>${data.message || data.error || 'Bilinmeyen hata'}</p>`;
                 }
                 
             } catch (error) {
@@ -163,6 +207,14 @@
                 resultDiv.style.display = 'block';
                 resultDiv.className = 'result error';
                 resultDiv.innerHTML = `<h3>❌ Bağlantı Hatası</h3><p>Sunucuya bağlanılamadı: ${error.message}</p>`;
+            }
+        });
+
+        // Excel indirme butonu
+        document.getElementById('downloadExcel').addEventListener('click', function() {
+            if (currentCompany && currentCountry) {
+                const downloadUrl = `/download-excel?company=${encodeURIComponent(currentCompany)}&country=${encodeURIComponent(currentCountry)}`;
+                window.open(downloadUrl, '_blank');
             }
         });
     </script>

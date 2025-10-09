@@ -129,7 +129,8 @@ class AdvancedAIAnalyzer:
                 'AI_AÇIKLAMA': explanation,
                 'AI_NEDENLER': ' | '.join(reasons),
                 'TESPIT_EDILEN_GTIPLER': ', '.join(gtip_codes),
-                'YAPTIRIM_RISKI': 'DÜŞÜK' if not gtip_codes else 'KONTROL_EDİLMELİ'
+                'YAPTIRIM_RISKI': 'DÜŞÜK' if not gtip_codes else 'KONTROL_EDİLMELİ',
+                'AI_TAVSIYE': 'Analiz tamamlandı. Sonuçları değerlendirin.'
             }
             
         except Exception as e:
@@ -139,7 +140,8 @@ class AdvancedAIAnalyzer:
                 'AI_AÇIKLAMA': f'Analiz hatası: {str(e)}',
                 'AI_NEDENLER': '',
                 'TESPIT_EDILEN_GTIPLER': '',
-                'YAPTIRIM_RISKI': 'BELİRSİZ'
+                'YAPTIRIM_RISKI': 'BELİRSİZ',
+                'AI_TAVSIYE': 'Tekrar deneyiniz.'
             }
 
 class SearchEngineManager:
@@ -162,6 +164,11 @@ class SearchEngineManager:
                     'title': f'{query} İhracat Bilgileri',
                     'snippet': f'{query} için ihracat ve ticaret rehberi',
                     'url': 'https://example.com/2'
+                },
+                {
+                    'title': f'{query} Business Opportunities',
+                    'snippet': f'{query} iş fırsatları ve ticaret ortaklıkları',
+                    'url': 'https://example.com/3'
                 }
             ]
             
@@ -189,7 +196,8 @@ def create_advanced_excel_report(results: List[Dict], company: str, country: str
                 'AI_TAVSIYE': result.get('AI_TAVSIYE', ''),
                 'ARAMA_SORGUSU': result.get('ARAMA_SORGUSU', ''),
                 'BAŞLIK': result.get('BAŞLIK', ''),
-                'URL': result.get('URL', '')
+                'URL': result.get('URL', ''),
+                'ÖZET': result.get('ÖZET', '')
             }
             df_data.append(row)
         
@@ -207,7 +215,7 @@ def create_advanced_excel_report(results: List[Dict], company: str, country: str
         headers = [
             'ŞİRKET', 'ÜLKE', 'DURUM', 'GÜVEN_YÜZDESİ', 'YAPTIRIM_RISKI',
             'TESPIT_EDILEN_GTIPLER', 'AI_AÇIKLAMA', 'AI_NEDENLER', 
-            'AI_TAVSIYE', 'ARAMA_SORGUSU', 'BAŞLIK', 'URL'
+            'AI_TAVSIYE', 'ARAMA_SORGUSU', 'BAŞLIK', 'URL', 'ÖZET'
         ]
         
         for col, header in enumerate(headers, 1):
