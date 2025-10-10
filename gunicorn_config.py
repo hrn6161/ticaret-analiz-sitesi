@@ -4,8 +4,8 @@ import multiprocessing
 workers = 1
 worker_class = 'sync'
 
-# Timeout süreleri
-timeout = 25
+# Timeout süreleri - Render için optimize
+timeout = 30
 graceful_timeout = 10
 keepalive = 2
 
@@ -13,3 +13,7 @@ keepalive = 2
 accesslog = '-'
 errorlog = '-'
 loglevel = 'info'
+
+# Worker başlangıç
+def on_starting(server):
+    print("🚀 OPTİMİZE CRAWLER SİSTEMİ BAŞLATILIYOR...")
