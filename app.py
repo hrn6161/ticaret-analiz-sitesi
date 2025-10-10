@@ -13,7 +13,7 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-print("🚀 GELİŞMİŞ YAPAY ZEKA YAPTIRIM ANALİZ SİSTEMİ BAŞLATILIYOR...")
+print("🚀 DUCKDUCKGO İLE GERÇEK ARAMA SİSTEMİ BAŞLATILIYOR...")
 
 # Logging setup
 logging.basicConfig(
@@ -24,117 +24,175 @@ logging.basicConfig(
 class Config:
     def __init__(self):
         self.MAX_RESULTS = 3
-        self.REQUEST_TIMEOUT = 15
+        self.REQUEST_TIMEOUT = 30
         self.RETRY_ATTEMPTS = 2
         self.DELAY_BETWEEN_REQUESTS = 2.0
-        self.DELAY_BETWEEN_SEARCHES = 2.0
-        self.EU_SANCTIONS_URL = "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A02014R0833-20250720"
+        self.DELAY_BETWEEN_SEARCHES = 3.0
         self.USER_AGENTS = [
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         ]
 
-class EUSanctionsAPI:
+class DuckDuckGoSearcher:
     def __init__(self, config):
         self.config = config
-        self.sanctions_cache = {}
-        self.last_update = None
-        self.cache_duration = 3600
     
-    def fetch_real_time_sanctions(self):
+    def search_duckduckgo(self, query, max_results=3):
+        """DuckDuckGo'da gerçek arama yap"""
         try:
-            if (self.last_update and 
-                time.time() - self.last_update < self.cache_duration and 
-                self.sanctions_cache):
-                logging.info("Önbellekten AB yaptırım listesi kullanılıyor")
-                return self.sanctions_cache
+            logging.info(f"🔍 DuckDuckGo'da aranıyor: {query}")
             
-            logging.info("🌐 Gerçek zamanlı AB yaptırım listesi alınıyor...")
+            # Tırnak işaretlerini kaldır
+            query = query.replace('"', '')
             
             headers = {
                 'User-Agent': random.choice(self.config.USER_AGENTS),
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate',
             }
             
-            response = requests.get(
-                self.config.EU_SANCTIONS_URL, 
+            # DuckDuckGo HTML arama URL'si
+            url = "https://html.duckduckgo.com/html/"
+            data = {
+                'q': query,
+                'b': '',
+                'kl': 'us-en'
+            }
+            
+            response = requests.post(
+                url, 
+                data=data, 
                 headers=headers, 
                 timeout=self.config.REQUEST_TIMEOUT
             )
             
             if response.status_code == 200:
-                sanctions_data = self.get_fallback_sanctions()  # Basit yedek kullan
-                self.sanctions_cache = sanctions_data
-                self.last_update = time.time()
-                logging.info(f"✅ AB yaptırım listesi güncellendi: {len(sanctions_data)} yasaklı ürün")
-                return sanctions_data
+                return self.parse_duckduckgo_results(response.text, max_results)
             else:
-                logging.warning(f"AB yaptırım listesi alınamadı: {response.status_code}")
-                return self.get_fallback_sanctions()
+                logging.warning(f"DuckDuckGo arama hatası: {response.status_code}")
+                return []
                 
         except Exception as e:
-            logging.error(f"AB yaptırım listesi alım hatası: {e}")
-            return self.get_fallback_sanctions()
+            logging.error(f"DuckDuckGo arama hatası: {e}")
+            return []
     
-    def get_fallback_sanctions(self):
-        logging.info("Yedek yaptırım listesi kullanılıyor")
-        return {
-            '8701': {'full_code': '8701', 'description': 'Traktörler', 'risk_level': 'YÜKSEK_RISK', 'source': 'BACKUP', 'confidence': 'YÜKSEK'},
-            '8702': {'full_code': '8702', 'description': 'Motorlu taşıtlar', 'risk_level': 'YÜKSEK_RISK', 'source': 'BACKUP', 'confidence': 'YÜKSEK'},
-            '8703': {'full_code': '8703', 'description': 'Otomobiller', 'risk_level': 'YÜKSEK_RISK', 'source': 'BACKUP', 'confidence': 'YÜKSEK'},
-            '8704': {'full_code': '8704', 'description': 'Kamyonlar', 'risk_level': 'YÜKSEK_RISK', 'source': 'BACKUP', 'confidence': 'YÜKSEK'},
-            '8802': {'full_code': '8802', 'description': 'Uçaklar, helikopterler', 'risk_level': 'YÜKSEK_RISK', 'source': 'BACKUP', 'confidence': 'YÜKSEK'},
-            '9301': {'full_code': '9301', 'description': 'Silahlar', 'risk_level': 'YÜKSEK_RISK', 'source': 'BACKUP', 'confidence': 'YÜKSEK'},
-            '8471': {'full_code': '8471', 'description': 'Bilgisayarlar', 'risk_level': 'YÜKSEK_RISK', 'source': 'BACKUP', 'confidence': 'YÜKSEK'},
-        }
-    
-    def check_gtip_against_sanctions(self, gtip_codes):
-        sanctioned_found = []
-        sanction_details = {}
+    def parse_duckduckgo_results(self, html, max_results):
+        """DuckDuckGo sonuçlarını parse et"""
+        soup = BeautifulSoup(html, 'html.parser')
+        results = []
         
-        try:
-            real_time_sanctions = self.fetch_real_time_sanctions()
-            
-            for gtip_code in gtip_codes:
-                if gtip_code in real_time_sanctions:
-                    sanctioned_found.append(gtip_code)
-                    sanction_info = real_time_sanctions[gtip_code]
+        # DuckDuckGo search result div'leri
+        result_divs = soup.find_all('div', class_='result')
+        
+        for div in result_divs[:max_results]:
+            try:
+                # Başlık
+                title_elem = div.find('a', class_='result__a')
+                if not title_elem:
+                    continue
                     
-                    sanction_details[gtip_code] = {
-                        'risk_level': "YAPTIRIMLI_YÜKSEK_RISK",
-                        'reason': f"GTIP {gtip_code} - {sanction_info['description']}",
-                        'found_in_sanction_list': True,
-                        'prohibition_confidence': 3,
-                        'sanction_details': sanction_info
-                    }
-                    logging.warning(f"⛔ Yaptırımlı kod bulundu: {gtip_code}")
-                else:
-                    sanction_details[gtip_code] = {
-                        'risk_level': "DÜŞÜK",
-                        'reason': f"GTIP {gtip_code} AB yaptırım listesinde bulunamadı",
-                        'found_in_sanction_list': False,
-                        'prohibition_confidence': 0
-                    }
-            
-            logging.info(f"✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: {len(sanctioned_found)} yasaklı kod")
-            
-        except Exception as e:
-            logging.error(f"❌ AB yaptırım kontrol hatası: {e}")
+                title = title_elem.get_text(strip=True)
+                
+                # URL
+                url = title_elem.get('href')
+                if url and '//duckduckgo.com/l/' in url:
+                    # DuckDuckGo redirect link'ini çöz
+                    try:
+                        redirect_response = requests.get(url, timeout=10, allow_redirects=True)
+                        url = redirect_response.url
+                    except:
+                        # Redirect çözülemezse orijinal URL'yi kullan
+                        pass
+                
+                # Özet
+                snippet_elem = div.find('a', class_='result__snippet')
+                snippet = snippet_elem.get_text(strip=True) if snippet_elem else ""
+                
+                # URL'yi temizle
+                if url and url.startswith('//'):
+                    url = 'https:' + url
+                
+                results.append({
+                    'title': title,
+                    'url': url,
+                    'snippet': snippet
+                })
+                
+                logging.info(f"📄 Bulunan sonuç: {title[:50]}...")
+                
+            except Exception as e:
+                logging.error(f"Sonuç parse hatası: {e}")
+                continue
         
-        return sanctioned_found, sanction_details
+        logging.info(f"DuckDuckGo'dan {len(results)} sonuç bulundu")
+        return results
 
-class RealTimeSanctionAnalyzer:
+class ContentCrawler:
     def __init__(self, config):
         self.config = config
-        self.eu_api = EUSanctionsAPI(config)
     
-    def extract_gtip_codes_from_text(self, text):
+    def crawl_page_content(self, url, target_country):
+        """Sayfa içeriğini crawl et ve ülke bağlantısını ara"""
+        try:
+            if not url or not url.startswith('http'):
+                return {'country_found': False, 'gtip_codes': [], 'content_preview': ''}
+                
+            logging.info(f"🌐 Sayfa crawl ediliyor: {url}")
+            
+            headers = {
+                'User-Agent': random.choice(self.config.USER_AGENTS),
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            }
+            
+            response = requests.get(url, headers=headers, timeout=self.config.REQUEST_TIMEOUT)
+            
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.text, 'html.parser')
+                
+                # Script ve style tag'lerini temizle
+                for script in soup(["script", "style"]):
+                    script.decompose()
+                
+                text_content = soup.get_text()
+                text_lower = text_content.lower()
+                
+                # Ülke ismini ara (case insensitive)
+                country_found = target_country.lower() in text_lower
+                
+                # GTIP/HS kodlarını ara
+                gtip_codes = self.extract_gtip_codes(text_content)
+                
+                content_preview = text_content[:300] + "..." if len(text_content) > 300 else text_content
+                content_preview = ' '.join(content_preview.split())  # Fazla boşlukları temizle
+                
+                logging.info(f"🔍 Sayfa analizi: Ülke bulundu={country_found}, GTIP kodları={gtip_codes}")
+                
+                return {
+                    'country_found': country_found,
+                    'gtip_codes': gtip_codes,
+                    'content_preview': content_preview
+                }
+            else:
+                logging.warning(f"Sayfa crawl hatası: {response.status_code} - {url}")
+                return {'country_found': False, 'gtip_codes': [], 'content_preview': ''}
+                
+        except Exception as e:
+            logging.error(f"Crawl hatası {url}: {e}")
+            return {'country_found': False, 'gtip_codes': [], 'content_preview': ''}
+    
+    def extract_gtip_codes(self, text):
+        """Metinden GTIP/HS kodlarını çıkar"""
         patterns = [
             r'\b\d{4}\.?\d{0,4}\b',
             r'\bHS\s?CODE\s?:?\s?(\d{4,8})\b',
             r'\bHS\s?:?\s?(\d{4,8})\b',
             r'\bGTIP\s?:?\s?(\d{4,8})\b',
+            r'\bH\.S\.\s?CODE?\s?:?\s?(\d{4,8})\b',
+            r'\bHarmonized System\s?Code\s?:?\s?(\d{4,8})\b',
+            r'\bCustoms\s?Code\s?:?\s?(\d{4,8})\b',
+            r'\bTariff\s?Code\s?:?\s?(\d{4,8})\b',
         ]
         
         all_codes = set()
@@ -151,213 +209,194 @@ class RealTimeSanctionAnalyzer:
                     if main_code.isdigit():
                         all_codes.add(main_code)
         
+        # 4 haneli sayıları kontrol et (GTIP aralığında mı)
         number_pattern = r'\b\d{4}\b'
         numbers = re.findall(number_pattern, text)
         
         for num in numbers:
             if num.isdigit():
                 num_int = int(num)
+                # GTIP aralıkları
                 if ((8400 <= num_int <= 8600) or (8700 <= num_int <= 8900) or 
-                    (9000 <= num_int <= 9300) or (2800 <= num_int <= 2900)):
+                    (9000 <= num_int <= 9300) or (2800 <= num_int <= 2900) or
+                    (8470 <= num_int <= 8480) or (8500 <= num_int <= 8520) or
+                    (8540 <= num_int <= 8550) or (9301 <= num_int <= 9307)):
                     all_codes.add(num)
         
-        logging.info(f"Metinden çıkarılan GTIP/HS kodları: {list(all_codes)}")
         return list(all_codes)
-    
-    def check_eu_sanctions_realtime(self, gtip_codes):
-        return self.eu_api.check_gtip_against_sanctions(gtip_codes)
 
-class SearchEngineManager:
+class EURLexChecker:
     def __init__(self, config):
         self.config = config
     
-    def search_with_alternative_engines(self, query, max_results=None):
-        if max_results is None:
-            max_results = self.config.MAX_RESULTS
-            
-        logging.info(f"🔍 Çoklu arama motorlarında aranıyor: {query}")
+    def check_gtip_in_eur_lex(self, gtip_codes):
+        """GTIP kodlarını EUR-Lex'te kontrol et"""
+        sanctioned_codes = []
         
-        # Yedek veri üret - basit ve güvenilir
-        return self.generate_fallback_results(query, max_results)
-    
-    def generate_fallback_results(self, query, max_results):
-        company_country = query.split()
-        company = company_country[0] if company_country else "Şirket"
-        country = company_country[-1] if len(company_country) > 1 else "Ülke"
+        for gtip_code in gtip_codes:
+            try:
+                logging.info(f"🔍 EUR-Lex'te kontrol ediliyor: GTIP {gtip_code}")
+                
+                # EUR-Lex arama URL'si
+                url = "https://eur-lex.europa.eu/search.html"
+                params = {
+                    'qid': int(time.time()),
+                    'text': f'"{gtip_code}" prohibited banned sanction restricted',
+                    'type': 'advanced',
+                    'lang': 'en'
+                }
+                
+                headers = {
+                    'User-Agent': random.choice(self.config.USER_AGENTS),
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                }
+                
+                response = requests.get(url, params=params, headers=headers, timeout=self.config.REQUEST_TIMEOUT)
+                
+                if response.status_code == 200:
+                    soup = BeautifulSoup(response.text, 'html.parser')
+                    content = soup.get_text().lower()
+                    
+                    # Yaptırım terimlerini ara
+                    sanction_terms = [
+                        'prohibited', 'banned', 'sanction', 'restricted', 
+                        'embargo', 'forbidden', 'prohibition', 'ban'
+                    ]
+                    found_sanction = any(term in content for term in sanction_terms)
+                    
+                    if found_sanction:
+                        sanctioned_codes.append(gtip_code)
+                        logging.warning(f"⛔ Yaptırımlı kod bulundu: {gtip_code}")
+                    else:
+                        logging.info(f"✅ Kod temiz: {gtip_code}")
+                else:
+                    logging.warning(f"EUR-Lex erişim hatası: {response.status_code}")
+                
+                time.sleep(1)  # Rate limiting
+                
+            except Exception as e:
+                logging.error(f"EUR-Lex kontrol hatası GTIP {gtip_code}: {e}")
+                continue
         
-        gtip_codes = ['8703', '8407', '8471', '8542', '8802', '9301']
-        selected_gtip = random.choice(gtip_codes)
-        
-        fallback_results = [
-            {
-                'title': f"{company} {country} İhracat ve Ticaret İlişkileri",
-                'url': f"https://example.com/{company}-{country}-trade",
-                'snippet': f"{company} şirketinin {country} ile ticaret ilişkileri. GTIP kodları (örneğin {selected_gtip}) ve gümrük işlemleri."
-            },
-            {
-                'title': f"{company} - {country} Pazar Analizi",
-                'url': f"https://example.com/{company}-{country}-market",
-                'snippet': f"{company} şirketinin {country} pazarındaki distribütör ağı. HS kodu: {selected_gtip}."
-            },
-            {
-                'title': f"{country} İhracat Fırsatları - {company}",
-                'url': f"https://example.com/{country}-export-{company}",
-                'snippet': f"{company} şirketinin {country} pazarındaki ihracat stratejileri. Örnek GTIP: {selected_gtip}."
-            }
-        ]
-        
-        logging.info(f"Yedek veri üretildi: {len(fallback_results)} sonuç - GTIP: {selected_gtip}")
-        return fallback_results[:max_results]
+        return sanctioned_codes
 
-class AdvancedAIAnalyzer:
-    def __init__(self, config):
-        self.config = config
-        self.sanction_analyzer = RealTimeSanctionAnalyzer(config)
-    
-    def smart_ai_analysis(self, text, company, country):
-        try:
-            text_lower = text.lower()
-            company_lower = company.lower()
-            country_lower = country.lower()
-            
-            score = 0
-            reasons = []
-            
-            # GTIP/HS kod çıkarımı
-            gtip_codes = self.sanction_analyzer.extract_gtip_codes_from_text(text)
-            
-            if gtip_codes:
-                score += 40
-                reasons.append(f"GTIP/HS kodları tespit edildi: {', '.join(gtip_codes)}")
-            
-            # GERÇEK ZAMANLI Yaptırım kontrolü
-            sanctioned_codes, sanction_analysis = self.sanction_analyzer.check_eu_sanctions_realtime(gtip_codes)
-            
-            # Şirket ve ülke kontrolü
-            company_words = [word for word in company_lower.split() if len(word) > 3]
-            company_found = any(word in text_lower for word in company_words)
-            country_found = country_lower in text_lower
-            
-            if company_found:
-                score += 30
-                reasons.append("Şirket ismi bulundu")
-            
-            if country_found:
-                score += 30
-                reasons.append("Ülke ismi bulundu")
-            
-            # Ticaret terimleri
-            trade_indicators = {
-                'export': 15, 'import': 15, 'trade': 12, 'business': 10,
-                'partner': 12, 'market': 10, 'distributor': 15, 'supplier': 12,
-                'hs code': 20, 'gtip': 20,
-            }
-            
-            for term, points in trade_indicators.items():
-                if term in text_lower:
-                    score += points
-                    reasons.append(f"{term} terimi bulundu")
-            
-            # Yaptırım risk analizi
-            if sanctioned_codes:
-                status = "YAPTIRIMLI_YÜKSEK_RISK"
-                explanation = f"⛔ YÜKSEK YAPTIRIM RİSKİ: {company} şirketi {country} ile yaptırımlı ürün ticareti yapıyor"
-                ai_tavsiye = f"⛔ BU ÜRÜNLERİN {country.upper()} İHRACI KESİNLİKLE YASAKTIR! GTIP/HS: {', '.join(sanctioned_codes)}"
-            elif score >= 60:
-                status = "EVET"
-                explanation = f"✅ YÜKSEK GÜVEN: {company} şirketi {country} ile güçlü ticaret ilişkisi"
-                ai_tavsiye = "Ticaret ilişkisi doğrulandı"
-            elif score >= 30:
-                status = "OLASI"
-                explanation = f"🟡 ORTA GÜVEN: {company} şirketinin {country} ile ticaret olasılığı"
-                ai_tavsiye = "Ek araştırma önerilir"
-            else:
-                status = "HAYIR"
-                explanation = f"⚪ BELİRSİZ: {company} şirketinin {country} ile ticaret ilişkisi kanıtı yok"
-                ai_tavsiye = "Yeterli kanıt bulunamadı"
-            
-            ai_report = {
-                'DURUM': status,
-                'HAM_PUAN': score,
-                'GÜVEN_YÜZDESİ': min(score, 100),
-                'AI_AÇIKLAMA': explanation,
-                'AI_NEDENLER': ' | '.join(reasons),
-                'AI_TAVSIYE': ai_tavsiye,
-                'YAPTIRIM_RISKI': 'YAPTIRIMLI_YÜKSEK_RISK' if sanctioned_codes else 'DÜŞÜK',
-                'TESPIT_EDILEN_GTIPLER': ', '.join(gtip_codes),
-                'YAPTIRIMLI_GTIPLER': ', '.join(sanctioned_codes),
-            }
-            
-            return ai_report
-            
-        except Exception as e:
-            logging.error(f"AI analiz hatası: {e}")
-            return {
-                'DURUM': 'HATA', 'HAM_PUAN': 0, 'GÜVEN_YÜZDESİ': 0,
-                'AI_AÇIKLAMA': f'AI analiz hatası: {str(e)}', 'AI_NEDENLER': '',
-                'AI_TAVSIYE': 'Tekrar deneyiniz', 'YAPTIRIM_RISKI': 'BELİRSİZ',
-                'TESPIT_EDILEN_GTIPLER': '', 'YAPTIRIMLI_GTIPLER': ''
-            }
-
-# AdvancedTradeAnalyzer sınıfını DÜZGÜN tanımla
 class AdvancedTradeAnalyzer:
     def __init__(self, config):
         self.config = config
-        self.search_engine = SearchEngineManager(config)
-        self.ai_analyzer = AdvancedAIAnalyzer(config)
+        self.searcher = DuckDuckGoSearcher(config)
+        self.crawler = ContentCrawler(config)
+        self.eur_lex_checker = EURLexChecker(config)
     
-    def ai_enhanced_search(self, company, country):
-        logging.info(f"🤖 AI DESTEKLİ ANALİZ: {company} ↔ {country}")
+    def analyze_company_country(self, company, country):
+        """Şirket-ülke analizi yap"""
+        logging.info(f"🤖 GERÇEK ANALİZ BAŞLATILIYOR: {company} ↔ {country}")
         
         search_queries = [
-            f"{company} export {country}",
+            f"{company} {country} export",
             f"{company} {country} business",
+            f"{company} {country} trade relations",
         ]
         
         all_results = []
         
         for query in search_queries:
             try:
-                logging.info(f"🔍 Arama: {query}")
-                search_results = self.search_engine.search_with_alternative_engines(query)
+                logging.info(f"🔍 Sorgu çalıştırılıyor: {query}")
+                
+                # DuckDuckGo'da ara
+                search_results = self.searcher.search_duckduckgo(query, self.config.MAX_RESULTS)
+                
+                if not search_results:
+                    logging.warning(f"❌ Bu sorgu için sonuç bulunamadı: {query}")
+                    continue
                 
                 for result in search_results:
-                    analysis_text = f"{result['title']} {result['snippet']}"
-                    ai_analysis = self.ai_analyzer.smart_ai_analysis(analysis_text, company, country)
+                    logging.info(f"📄 Sayfa analiz ediliyor: {result['title'][:50]}...")
                     
-                    combined_result = {
-                        'ŞİRKET': company,
-                        'ÜLKE': country,
-                        'ARAMA_SORGUSU': query,
-                        'BAŞLIK': result['title'],
-                        'URL': result['url'],
-                        'ÖZET': result['snippet'],
-                        **ai_analysis
-                    }
+                    # Sayfayı crawl et
+                    crawl_result = self.crawler.crawl_page_content(result['url'], country)
                     
-                    all_results.append(combined_result)
+                    # Eğer ülke bağlantısı bulunduysa ve GTIP kodları varsa, EUR-Lex kontrolü yap
+                    sanctioned_gtips = []
+                    if crawl_result['country_found'] and crawl_result['gtip_codes']:
+                        logging.info(f"🔍 EUR-Lex kontrolü yapılıyor: {crawl_result['gtip_codes']}")
+                        sanctioned_gtips = self.eur_lex_checker.check_gtip_in_eur_lex(crawl_result['gtip_codes'])
+                    
+                    # Analiz sonucu oluştur
+                    analysis = self.create_analysis_result(
+                        company, country, result, crawl_result, sanctioned_gtips
+                    )
+                    
+                    all_results.append(analysis)
+                    
+                    # Kısa bekleme
+                    time.sleep(1)
                 
+                # Sorgular arasında bekleme
                 time.sleep(self.config.DELAY_BETWEEN_SEARCHES)
                 
             except Exception as e:
-                logging.error(f"Search query error for '{query}': {e}")
+                logging.error(f"Sorgu hatası '{query}': {e}")
                 continue
         
         return all_results
+    
+    def create_analysis_result(self, company, country, search_result, crawl_result, sanctioned_gtips):
+        """Analiz sonucu oluştur"""
+        
+        # Risk değerlendirmesi
+        if sanctioned_gtips:
+            status = "YAPTIRIMLI_YÜKSEK_RISK"
+            explanation = f"⛔ YÜKSEK RİSK: {company} şirketi {country} ile yaptırımlı ürün ticareti yapıyor"
+            ai_tavsiye = f"⛔ ACİL DURUM! Bu ürünlerin {country.upper()} ihracı YASAKTIR: {', '.join(sanctioned_gtips)}"
+            risk_level = "YÜKSEK"
+        elif crawl_result['country_found'] and crawl_result['gtip_codes']:
+            status = "RISK_VAR"
+            explanation = f"🟡 RİSK VAR: {company} şirketi {country} ile ticaret bağlantısı bulundu"
+            ai_tavsiye = f"Ticaret bağlantısı doğrulandı. GTIP kodları kontrol edildi: {', '.join(crawl_result['gtip_codes'])}"
+            risk_level = "ORTA"
+        elif crawl_result['country_found']:
+            status = "İLİŞKİ_VAR"
+            explanation = f"🟢 İLİŞKİ VAR: {company} şirketi {country} ile bağlantılı"
+            ai_tavsiye = "Ticaret bağlantısı bulundu ancak GTIP kodu tespit edilemedi"
+            risk_level = "DÜŞÜK"
+        else:
+            status = "TEMIZ"
+            explanation = f"✅ TEMİZ: {company} şirketinin {country} ile ticaret bağlantısı bulunamadı"
+            ai_tavsiye = "Ticaret bağlantısı bulunamadı"
+            risk_level = "YOK"
+        
+        return {
+            'ŞİRKET': company,
+            'ÜLKE': country,
+            'DURUM': status,
+            'AI_AÇIKLAMA': explanation,
+            'AI_TAVSIYE': ai_tavsiye,
+            'YAPTIRIM_RISKI': risk_level,
+            'TESPIT_EDILEN_GTIPLER': ', '.join(crawl_result['gtip_codes']),
+            'YAPTIRIMLI_GTIPLER': ', '.join(sanctioned_gtips),
+            'ULKE_BAGLANTISI': 'EVET' if crawl_result['country_found'] else 'HAYIR',
+            'BAŞLIK': search_result['title'],
+            'URL': search_result['url'],
+            'ÖZET': search_result['snippet'],
+            'CONTENT_PREVIEW': crawl_result['content_preview'],
+            'ARAMA_MOTORU': 'DuckDuckGo'
+        }
 
-def create_advanced_excel_report(results, company, country):
+def create_excel_report(results, company, country):
+    """Excel raporu oluştur"""
     try:
-        filename = f"{company.replace(' ', '_')}_{country}_analiz.xlsx"
+        filename = f"{company.replace(' ', '_')}_{country}_gercek_analiz.xlsx"
         filepath = os.path.join('/tmp', filename)
         
         wb = Workbook()
         ws = wb.active
-        ws.title = "AI Analiz Sonuçları"
+        ws.title = "DuckDuckGo Analiz Sonuçları"
         
         headers = [
-            'ŞİRKET', 'ÜLKE', 'DURUM', 'GÜVEN_YÜZDESİ', 'YAPTIRIM_RISKI',
+            'ŞİRKET', 'ÜLKE', 'DURUM', 'YAPTIRIM_RISKI', 'ULKE_BAGLANTISI',
             'TESPIT_EDILEN_GTIPLER', 'YAPTIRIMLI_GTIPLER', 'AI_AÇIKLAMA',
-            'AI_NEDENLER', 'AI_TAVSIYE', 'BAŞLIK', 'URL'
+            'AI_TAVSIYE', 'BAŞLIK', 'URL', 'ÖZET', 'ARAMA_MOTORU'
         ]
         
         for col, header in enumerate(headers, 1):
@@ -367,15 +406,16 @@ def create_advanced_excel_report(results, company, country):
             ws.cell(row=row, column=1, value=str(result.get('ŞİRKET', '')))
             ws.cell(row=row, column=2, value=str(result.get('ÜLKE', '')))
             ws.cell(row=row, column=3, value=str(result.get('DURUM', '')))
-            ws.cell(row=row, column=4, value=str(result.get('GÜVEN_YÜZDESİ', 0)))
-            ws.cell(row=row, column=5, value=str(result.get('YAPTIRIM_RISKI', '')))
+            ws.cell(row=row, column=4, value=str(result.get('YAPTIRIM_RISKI', '')))
+            ws.cell(row=row, column=5, value=str(result.get('ULKE_BAGLANTISI', '')))
             ws.cell(row=row, column=6, value=str(result.get('TESPIT_EDILEN_GTIPLER', '')))
             ws.cell(row=row, column=7, value=str(result.get('YAPTIRIMLI_GTIPLER', '')))
             ws.cell(row=row, column=8, value=str(result.get('AI_AÇIKLAMA', '')))
-            ws.cell(row=row, column=9, value=str(result.get('AI_NEDENLER', '')))
-            ws.cell(row=row, column=10, value=str(result.get('AI_TAVSIYE', '')))
-            ws.cell(row=row, column=11, value=str(result.get('BAŞLIK', '')))
-            ws.cell(row=row, column=12, value=str(result.get('URL', '')))
+            ws.cell(row=row, column=9, value=str(result.get('AI_TAVSIYE', '')))
+            ws.cell(row=row, column=10, value=str(result.get('BAŞLIK', '')))
+            ws.cell(row=row, column=11, value=str(result.get('URL', '')))
+            ws.cell(row=row, column=12, value=str(result.get('ÖZET', '')))
+            ws.cell(row=row, column=13, value=str(result.get('ARAMA_MOTORU', '')))
         
         for column in ws.columns:
             max_length = 0
@@ -416,14 +456,16 @@ def analyze():
         if not company or not country:
             return jsonify({"error": "Şirket ve ülke bilgisi gereklidir"}), 400
         
-        logging.info(f"Analiz başlatılıyor: {company} - {country}")
+        logging.info(f"🚀 GERÇEK DUCKDUCKGO ANALİZİ BAŞLATILIYOR: {company} - {country}")
         
         config = Config()
-        analyzer = AdvancedTradeAnalyzer(config)  # Şimdi çalışacak!
+        analyzer = AdvancedTradeAnalyzer(config)
         
-        results = analyzer.ai_enhanced_search(company, country)
+        # Gerçek analiz yap
+        results = analyzer.analyze_company_country(company, country)
         
-        excel_filepath = create_advanced_excel_report(results, company, country)
+        # Excel raporu oluştur
+        excel_filepath = create_excel_report(results, company, country)
         
         response_data = {
             "success": True,
@@ -449,7 +491,7 @@ def download_excel():
         if not company or not country:
             return jsonify({"error": "Şirket ve ülke bilgisi gereklidir"}), 400
         
-        filename = f"{company.replace(' ', '_')}_{country}_analiz.xlsx"
+        filename = f"{company.replace(' ', '_')}_{country}_gercek_analiz.xlsx"
         filepath = os.path.join('/tmp', filename)
         
         if os.path.exists(filepath):
