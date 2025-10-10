@@ -10,10 +10,12 @@ import sys
 import logging
 import os
 from datetime import datetime
+import concurrent.futures
+import threading
 
 app = Flask(__name__)
 
-print("🚀 AKILLI CRAWLER SİSTEMİ BAŞLATILIYOR...")
+print("🚀 HIZLI AKILLI CRAWLER SİSTEMİ BAŞLATILIYOR...")
 
 # Logging setup
 logging.basicConfig(
@@ -23,139 +25,64 @@ logging.basicConfig(
 
 class Config:
     def __init__(self):
-        self.MAX_RESULTS = 3
-        self.REQUEST_TIMEOUT = 30
-        self.RETRY_ATTEMPTS = 3
+        self.MAX_RESULTS = 2  # Daha az sonuç
+        self.REQUEST_TIMEOUT = 15  # Daha kısa timeout
+        self.RETRY_ATTEMPTS = 2
         self.USER_AGENTS = [
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/121.0",
         ]
 
-class SmartCrawler:
+class FastCrawler:
     def __init__(self, config):
         self.config = config
     
-    def smart_crawl(self, url, target_country):
-        """Akıllı crawl - farklı teknikler dener"""
-        # Önce basit requests ile dene
-        result = self._crawl_with_requests(url, target_country)
-        if result['status_code'] == 200:
-            return result
-        
-        # 403 alırsa, farklı headers ile tekrar dene
-        logging.warning(f"⚠️  403 hatası, farklı approach deneniyor: {url}")
-        result = self._crawl_with_advanced_headers(url, target_country)
-        if result['status_code'] == 200:
-            return result
-        
-        # Hala başarısızsa, sadece DuckDuckGo snippet'ini kullan
-        logging.warning(f"⚠️  Sayfaya erişilemedi, snippet analizi yapılacak: {url}")
-        return {'country_found': False, 'gtip_codes': [], 'content_preview': 'Sayfaya erişilemedi - Snippet analizi yapıldı', 'status_code': 'SNIPPET_ONLY'}
-    
-    def _crawl_with_requests(self, url, target_country):
-        """Basit requests ile crawl"""
+    def fast_crawl(self, url, target_country):
+        """Hızlı crawl - timeout süreleri kısa"""
         try:
-            logging.info(f"🌐 Sayfa crawl ediliyor: {url}")
-            
             headers = {
                 'User-Agent': random.choice(self.config.USER_AGENTS),
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
             }
             
-            response = requests.get(url, headers=headers, timeout=self.config.REQUEST_TIMEOUT)
+            response = requests.get(url, headers=headers, timeout=10)  # 10 saniye timeout
             
             if response.status_code == 200:
-                return self._parse_content(response.text, url, target_country, response.status_code)
+                return self._parse_content(response.text, target_country, response.status_code)
             else:
-                return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': response.status_code}
+                return {'country_found': False, 'gtip_codes': [], 'status_code': response.status_code}
                 
         except Exception as e:
-            logging.error(f"Crawl hatası {url}: {e}")
-            return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'ERROR'}
+            return {'country_found': False, 'gtip_codes': [], 'status_code': 'ERROR'}
     
-    def _crawl_with_advanced_headers(self, url, target_country):
-        """Gelişmiş headers ile crawl"""
+    def _parse_content(self, html, target_country, status_code):
+        """Hızlı içerik analizi"""
         try:
-            logging.info(f"🌐 Gelişmiş headers ile deneniyor: {url}")
+            soup = BeautifulSoup(html, 'html.parser')
             
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Connection': 'keep-alive',
-                'Upgrade-Insecure-Requests': '1',
-                'Sec-Fetch-Dest': 'document',
-                'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'none',
-                'Cache-Control': 'max-age=0',
+            # Sadece body ve title'ı al
+            text_content = soup.get_text()
+            text_lower = text_content.lower()
+            
+            # Ülke ismini ara
+            country_found = target_country.lower() in text_lower
+            
+            # GTIP kodlarını ara
+            gtip_codes = self.extract_gtip_codes(text_content)
+            
+            return {
+                'country_found': country_found,
+                'gtip_codes': gtip_codes,
+                'status_code': status_code
             }
-            
-            # Session kullan
-            session = requests.Session()
-            session.headers.update(headers)
-            
-            response = session.get(url, timeout=self.config.REQUEST_TIMEOUT)
-            
-            if response.status_code == 200:
-                return self._parse_content(response.text, url, target_country, response.status_code)
-            else:
-                return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': response.status_code}
-                
-        except Exception as e:
-            logging.error(f"Gelişmiş crawl hatası {url}: {e}")
-            return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'ERROR'}
-    
-    def _parse_content(self, html, url, target_country, status_code):
-        """Sayfa içeriğini parse et"""
-        soup = BeautifulSoup(html, 'html.parser')
-        
-        # Script ve style tag'lerini temizle
-        for script in soup(["script", "style", "nav", "header", "footer"]):
-            script.decompose()
-        
-        # Meta description'ı da al
-        meta_desc = soup.find('meta', attrs={'name': 'description'})
-        meta_content = meta_desc.get('content', '') if meta_desc else ''
-        
-        # Tüm metni al
-        text_content = soup.get_text()
-        combined_content = f"{meta_content} {text_content}"
-        
-        # Temizleme
-        lines = (line.strip() for line in combined_content.splitlines())
-        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-        cleaned_content = ' '.join(chunk for chunk in chunks if chunk)
-        
-        text_lower = cleaned_content.lower()
-        
-        # Ülke ismini ara
-        country_found = target_country.lower() in text_lower
-        
-        # GTIP/HS kodlarını ara
-        gtip_codes = self.extract_gtip_codes(cleaned_content)
-        
-        content_preview = cleaned_content[:400] + "..." if len(cleaned_content) > 400 else cleaned_content
-        
-        logging.info(f"🔍 Sayfa analizi: Ülke bulundu={country_found}, GTIP kodları={gtip_codes}")
-        
-        return {
-            'country_found': country_found,
-            'gtip_codes': gtip_codes,
-            'content_preview': content_preview,
-            'status_code': status_code
-        }
+        except:
+            return {'country_found': False, 'gtip_codes': [], 'status_code': 'PARSE_ERROR'}
     
     def extract_gtip_codes(self, text):
-        """Metinden GTIP/HS kodlarını çıkar"""
+        """GTIP kodlarını çıkar"""
         patterns = [
             r'\b\d{4}\.?\d{0,4}\b',
             r'\bHS\s?CODE\s?:?\s?(\d{4,8})\b',
-            r'\bHS\s?:?\s?(\d{4,8})\b',
             r'\bGTIP\s?:?\s?(\d{4,8})\b',
         ]
         
@@ -166,12 +93,9 @@ class SmartCrawler:
             for match in matches:
                 if isinstance(match, tuple):
                     match = match[0]
-                
                 code = re.sub(r'[^\d]', '', match)
                 if len(code) >= 4:
-                    main_code = code[:4]
-                    if main_code.isdigit():
-                        all_codes.add(main_code)
+                    all_codes.add(code[:4])
         
         return list(all_codes)
 
@@ -179,57 +103,46 @@ class DuckDuckGoSearcher:
     def __init__(self, config):
         self.config = config
     
-    def search_duckduckgo(self, query, max_results=3):
-        """DuckDuckGo'da arama yap"""
+    def fast_search(self, query, max_results=2):
+        """Hızlı arama"""
         try:
-            logging.info(f"🔍 DuckDuckGo'da aranıyor: {query}")
-            
-            query = query.replace('"', '')
-            
             headers = {
                 'User-Agent': random.choice(self.config.USER_AGENTS),
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
             }
             
             url = "https://html.duckduckgo.com/html/"
-            data = {
-                'q': query,
-                'b': '',
-                'kl': 'us-en'
-            }
+            data = {'q': query, 'b': '', 'kl': 'us-en'}
             
-            response = requests.post(url, data=data, headers=headers, timeout=self.config.REQUEST_TIMEOUT)
+            response = requests.post(url, data=data, headers=headers, timeout=15)
             
             if response.status_code == 200:
-                return self.parse_duckduckgo_results(response.text, max_results)
+                return self.parse_results(response.text, max_results)
             else:
-                logging.warning(f"DuckDuckGo arama hatası: {response.status_code}")
                 return []
                 
         except Exception as e:
-            logging.error(f"DuckDuckGo arama hatası: {e}")
             return []
     
-    def parse_duckduckgo_results(self, html, max_results):
-        """DuckDuckGo sonuçlarını parse et"""
+    def parse_results(self, html, max_results):
+        """Sonuçları parse et"""
         soup = BeautifulSoup(html, 'html.parser')
         results = []
         
-        result_divs = soup.find_all('div', class_='result')
+        result_divs = soup.find_all('div', class_='result')[:max_results]
         
-        for div in result_divs[:max_results]:
+        for div in result_divs:
             try:
                 title_elem = div.find('a', class_='result__a')
                 if not title_elem:
                     continue
                     
                 title = title_elem.get_text(strip=True)
-                
                 url = title_elem.get('href')
+                
+                # URL redirect
                 if url and '//duckduckgo.com/l/' in url:
                     try:
-                        redirect_response = requests.get(url, timeout=10, allow_redirects=True)
+                        redirect_response = requests.get(url, timeout=5, allow_redirects=True)
                         url = redirect_response.url
                     except:
                         pass
@@ -244,141 +157,99 @@ class DuckDuckGoSearcher:
                     'title': title,
                     'url': url,
                     'snippet': snippet,
-                    'full_text': f"{title} {snippet}"  # Snippet analizi için
+                    'full_text': f"{title} {snippet}"
                 })
                 
-                logging.info(f"📄 Bulunan sonuç: {title[:60]}...")
-                
-            except Exception as e:
-                logging.error(f"Sonuç parse hatası: {e}")
+            except:
                 continue
         
-        logging.info(f"✅ DuckDuckGo'dan {len(results)} sonuç bulundu")
         return results
 
 class EURLexChecker:
     def __init__(self, config):
         self.config = config
     
-    def check_gtip_in_eur_lex(self, gtip_codes):
-        """GTIP kodlarını EUR-Lex'te kontrol et"""
+    def quick_check_gtip(self, gtip_codes):
+        """Hızlı GTIP kontrolü"""
         sanctioned_codes = []
         
-        for gtip_code in gtip_codes:
+        for gtip_code in gtip_codes[:3]:  # Sadece ilk 3'ü kontrol et
             try:
-                logging.info(f"🔍 EUR-Lex'te kontrol ediliyor: GTIP {gtip_code}")
-                
-                time.sleep(random.uniform(1, 2))
-                
                 url = "https://eur-lex.europa.eu/search.html"
                 params = {
-                    'qid': int(time.time()),
-                    'text': f'"{gtip_code}" prohibited banned sanction restricted embargo',
+                    'text': f'"{gtip_code}" prohibited banned sanction',
                     'type': 'advanced',
                     'lang': 'en'
                 }
                 
-                headers = {
-                    'User-Agent': random.choice(self.config.USER_AGENTS),
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                }
-                
-                response = requests.get(url, params=params, headers=headers, timeout=self.config.REQUEST_TIMEOUT)
+                response = requests.get(url, params=params, timeout=10)
                 
                 if response.status_code == 200:
                     soup = BeautifulSoup(response.text, 'html.parser')
                     content = soup.get_text().lower()
                     
-                    sanction_terms = [
-                        'prohibited', 'banned', 'sanction', 'restricted', 
-                        'embargo', 'forbidden', 'prohibition', 'ban',
-                    ]
+                    sanction_terms = ['prohibited', 'banned', 'sanction', 'restricted']
                     found_sanction = any(term in content for term in sanction_terms)
                     
                     if found_sanction:
                         sanctioned_codes.append(gtip_code)
-                        logging.warning(f"⛔ Yaptırımlı kod bulundu: {gtip_code}")
-                    else:
-                        logging.info(f"✅ Kod temiz: {gtip_code}")
-                else:
-                    logging.warning(f"EUR-Lex erişim hatası: {response.status_code}")
                 
-            except Exception as e:
-                logging.error(f"EUR-Lex kontrol hatası GTIP {gtip_code}: {e}")
+            except:
                 continue
         
         return sanctioned_codes
 
-class AdvancedTradeAnalyzer:
+class FastTradeAnalyzer:
     def __init__(self, config):
         self.config = config
         self.searcher = DuckDuckGoSearcher(config)
-        self.crawler = SmartCrawler(config)
+        self.crawler = FastCrawler(config)
         self.eur_lex_checker = EURLexChecker(config)
     
-    def analyze_company_country(self, company, country):
-        """Şirket-ülke analizi yap"""
-        logging.info(f"🤖 AKILLI ANALİZ BAŞLATILIYOR: {company} ↔ {country}")
+    def quick_analyze(self, company, country):
+        """Hızlı analiz - timeout öncelikli"""
+        logging.info(f"⚡ HIZLI ANALİZ: {company} ↔ {country}")
         
-        search_queries = [
-            f"{company} {country} export",
-            f"{company} {country} business",
-        ]
+        # Sadece 1 sorgu
+        search_query = f"{company} {country} export"
         
-        all_results = []
-        
-        for i, query in enumerate(search_queries, 1):
-            try:
-                logging.info(f"🔍 Sorgu {i}/{len(search_queries)}: {query}")
+        try:
+            search_results = self.searcher.fast_search(search_query, self.config.MAX_RESULTS)
+            
+            if not search_results:
+                return [self.create_empty_result(company, country)]
+            
+            all_results = []
+            
+            for result in search_results:
+                # Hızlı crawl
+                crawl_result = self.crawler.fast_crawl(result['url'], country)
                 
-                search_results = self.searcher.search_duckduckgo(query, self.config.MAX_RESULTS)
+                # Snippet'ten GTIP çıkar
+                if not crawl_result['gtip_codes']:
+                    snippet_gtips = self.crawler.extract_gtip_codes(result['full_text'])
+                    crawl_result['gtip_codes'] = snippet_gtips
                 
-                if not search_results:
-                    logging.warning(f"❌ Bu sorgu için sonuç bulunamadı: {query}")
-                    continue
+                # Hızlı EUR-Lex kontrol
+                sanctioned_gtips = []
+                if crawl_result['gtip_codes']:
+                    sanctioned_gtips = self.eur_lex_checker.quick_check_gtip(crawl_result['gtip_codes'])
                 
-                for j, result in enumerate(search_results, 1):
-                    logging.info(f"📄 Sonuç {j} analiz ediliyor: {result['title'][:50]}...")
-                    
-                    # Akıllı crawl et
-                    crawl_result = self.crawler.smart_crawl(result['url'], country)
-                    
-                    # Eğer sayfaya erişilemediyse, snippet'ten GTIP kodlarını çıkar
-                    if crawl_result['status_code'] != 200 and 'full_text' in result:
-                        snippet_gtips = self.crawler.extract_gtip_codes(result['full_text'])
-                        if snippet_gtips:
-                            crawl_result['gtip_codes'] = snippet_gtips
-                            crawl_result['content_preview'] = 'Snippet analizi: ' + result['snippet'][:200]
-                            logging.info(f"🔍 Snippet'ten GTIP kodları çıkarıldı: {snippet_gtips}")
-                    
-                    # EUR-Lex kontrolü
-                    sanctioned_gtips = []
-                    if crawl_result['gtip_codes']:
-                        logging.info(f"🔍 EUR-Lex kontrolü yapılıyor...")
-                        sanctioned_gtips = self.eur_lex_checker.check_gtip_in_eur_lex(crawl_result['gtip_codes'])
-                    
-                    # Analiz sonucu oluştur
-                    analysis = self.create_analysis_result(
-                        company, country, result, crawl_result, sanctioned_gtips
-                    )
-                    
-                    all_results.append(analysis)
+                # Sonuç oluştur
+                analysis = self.create_analysis_result(
+                    company, country, result, crawl_result, sanctioned_gtips
+                )
                 
-                # Sorgular arasında bekleme
-                if i < len(search_queries):
-                    delay = random.uniform(2, 4)
-                    logging.info(f"⏳ {delay:.1f} saniye bekleniyor...")
-                    time.sleep(delay)
-                
-            except Exception as e:
-                logging.error(f"❌ Sorgu hatası '{query}': {e}")
-                continue
-        
-        return all_results
+                all_results.append(analysis)
+            
+            return all_results
+            
+        except Exception as e:
+            logging.error(f"❌ Hızlı analiz hatası: {e}")
+            return [self.create_empty_result(company, country)]
     
     def create_analysis_result(self, company, country, search_result, crawl_result, sanctioned_gtips):
         """Analiz sonucu oluştur"""
-        
         if sanctioned_gtips:
             status = "YAPTIRIMLI_YÜKSEK_RISK"
             explanation = f"⛔ YÜKSEK RİSK: {company} şirketi {country} ile yaptırımlı ürün ticareti yapıyor"
@@ -413,25 +284,38 @@ class AdvancedTradeAnalyzer:
             'BAŞLIK': search_result['title'],
             'URL': search_result['url'],
             'ÖZET': search_result['snippet'],
-            'CONTENT_PREVIEW': crawl_result['content_preview'],
             'STATUS_CODE': crawl_result.get('status_code', 'N/A')
         }
+    
+    def create_empty_result(self, company, country):
+        """Boş sonuç oluştur"""
+        return {
+            'ŞİRKET': company,
+            'ÜLKE': country,
+            'DURUM': 'HATA',
+            'AI_AÇIKLAMA': 'Analiz sırasında hata oluştu',
+            'AI_TAVSIYE': 'Lütfen daha sonra tekrar deneyin',
+            'YAPTIRIM_RISKI': 'BELIRSIZ',
+            'TESPIT_EDILEN_GTIPLER': '',
+            'YAPTIRIMLI_GTIPLER': '',
+            'ULKE_BAGLANTISI': 'HAYIR',
+            'BAŞLIK': '',
+            'URL': '',
+            'ÖZET': '',
+            'STATUS_CODE': 'ERROR'
+        }
 
-def create_excel_report(results, company, country):
-    """Excel raporu oluştur"""
+def create_quick_excel_report(results, company, country):
+    """Hızlı Excel raporu"""
     try:
-        filename = f"{company.replace(' ', '_')}_{country}_akilli_analiz.xlsx"
+        filename = f"{company.replace(' ', '_')}_{country}_analiz.xlsx"
         filepath = os.path.join('/tmp', filename)
         
         wb = Workbook()
         ws = wb.active
-        ws.title = "Akıllı Analiz Sonuçları"
+        ws.title = "Analiz Sonuçları"
         
-        headers = [
-            'ŞİRKET', 'ÜLKE', 'DURUM', 'YAPTIRIM_RISKI', 'ULKE_BAGLANTISI',
-            'TESPIT_EDILEN_GTIPLER', 'YAPTIRIMLI_GTIPLER', 'AI_AÇIKLAMA',
-            'AI_TAVSIYE', 'BAŞLIK', 'URL', 'STATUS_CODE'
-        ]
+        headers = ['ŞİRKET', 'ÜLKE', 'DURUM', 'YAPTIRIM_RISKI', 'TESPIT_EDILEN_GTIPLER', 'YAPTIRIMLI_GTIPLER', 'AI_AÇIKLAMA']
         
         for col, header in enumerate(headers, 1):
             ws.cell(row=1, column=col, value=header).font = Font(bold=True)
@@ -441,33 +325,15 @@ def create_excel_report(results, company, country):
             ws.cell(row=row, column=2, value=str(result.get('ÜLKE', '')))
             ws.cell(row=row, column=3, value=str(result.get('DURUM', '')))
             ws.cell(row=row, column=4, value=str(result.get('YAPTIRIM_RISKI', '')))
-            ws.cell(row=row, column=5, value=str(result.get('ULKE_BAGLANTISI', '')))
-            ws.cell(row=row, column=6, value=str(result.get('TESPIT_EDILEN_GTIPLER', '')))
-            ws.cell(row=row, column=7, value=str(result.get('YAPTIRIMLI_GTIPLER', '')))
-            ws.cell(row=row, column=8, value=str(result.get('AI_AÇIKLAMA', '')))
-            ws.cell(row=row, column=9, value=str(result.get('AI_TAVSIYE', '')))
-            ws.cell(row=row, column=10, value=str(result.get('BAŞLIK', '')))
-            ws.cell(row=row, column=11, value=str(result.get('URL', '')))
-            ws.cell(row=row, column=12, value=str(result.get('STATUS_CODE', '')))
-        
-        for column in ws.columns:
-            max_length = 0
-            column_letter = column[0].column_letter
-            for cell in column:
-                try:
-                    if len(str(cell.value)) > max_length:
-                        max_length = len(str(cell.value))
-                except:
-                    pass
-            adjusted_width = min(max_length + 2, 50)
-            ws.column_dimensions[column_letter].width = adjusted_width
+            ws.cell(row=row, column=5, value=str(result.get('TESPIT_EDILEN_GTIPLER', '')))
+            ws.cell(row=row, column=6, value=str(result.get('YAPTIRIMLI_GTIPLER', '')))
+            ws.cell(row=row, column=7, value=str(result.get('AI_AÇIKLAMA', '')))
         
         wb.save(filepath)
-        logging.info(f"✅ Excel raporu oluşturuldu: {filepath}")
         return filepath
         
     except Exception as e:
-        logging.error(f"❌ Excel rapor oluşturma hatası: {e}")
+        logging.error(f"Excel hatası: {e}")
         return None
 
 # Flask Route'ları
@@ -478,30 +344,32 @@ def home():
 @app.route('/analyze', methods=['POST'])
 def analyze():
     try:
+        start_time = time.time()
+        
         data = request.get_json()
-        
-        if not data:
-            return jsonify({"error": "JSON verisi bekleniyor"}), 400
-        
         company = data.get('company', '').strip()
         country = data.get('country', '').strip()
         
         if not company or not country:
             return jsonify({"error": "Şirket ve ülke bilgisi gereklidir"}), 400
         
-        logging.info(f"🚀 AKILLI ANALİZ BAŞLATILIYOR: {company} - {country}")
+        logging.info(f"🚀 HIZLI ANALİZ BAŞLATILIYOR: {company} - {country}")
         
         config = Config()
-        analyzer = AdvancedTradeAnalyzer(config)
+        analyzer = FastTradeAnalyzer(config)
         
-        results = analyzer.analyze_company_country(company, country)
+        results = analyzer.quick_analyze(company, country)
         
-        excel_filepath = create_excel_report(results, company, country)
+        excel_filepath = create_quick_excel_report(results, company, country)
+        
+        execution_time = time.time() - start_time
+        logging.info(f"⏱️ Analiz süresi: {execution_time:.2f}s")
         
         response_data = {
             "success": True,
             "company": company,
             "country": country,
+            "execution_time": f"{execution_time:.2f}s",
             "total_results": len(results),
             "analysis": results,
             "excel_download_url": f"/download-excel?company={company}&country={country}" if excel_filepath else None
@@ -519,10 +387,7 @@ def download_excel():
         company = request.args.get('company', '')
         country = request.args.get('country', '')
         
-        if not company or not country:
-            return jsonify({"error": "Şirket ve ülke bilgisi gereklidir"}), 400
-        
-        filename = f"{company.replace(' ', '_')}_{country}_akilli_analiz.xlsx"
+        filename = f"{company.replace(' ', '_')}_{country}_analiz.xlsx"
         filepath = os.path.join('/tmp', filename)
         
         if os.path.exists(filepath):
@@ -536,7 +401,6 @@ def download_excel():
             return jsonify({"error": "Excel dosyası bulunamadı"}), 404
             
     except Exception as e:
-        logging.error(f"❌ Excel indirme hatası: {e}")
         return jsonify({"error": f"İndirme hatası: {str(e)}"}), 500
 
 @app.route('/health')

@@ -1,28 +1,15 @@
 import multiprocessing
 
 # Worker sayısı
-workers = multiprocessing.cpu_count() * 2 + 1
+workers = 1
+worker_class = 'sync'
 
-# Worker class'ı
-worker_class = "sync"
+# Timeout süreleri
+timeout = 25
+graceful_timeout = 10
+keepalive = 2
 
-# Timeout süresi (saniye)
-timeout = 120
-
-# Bind adresi
-bind = "0.0.0.0:5000"
-
-# Log seviyesi
-loglevel = "info"
-
-# Access log
-accesslog = "-"
-
-# Error log
-errorlog = "-"
-
-# Worker timeout
-graceful_timeout = 120
-
-# Keepalive
-keepalive = 5
+# Logging
+accesslog = '-'
+errorlog = '-'
+loglevel = 'info'
