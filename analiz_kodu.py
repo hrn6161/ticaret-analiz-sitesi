@@ -9,14 +9,8 @@ import sys
 import logging
 import os
 from datetime import datetime
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, WebDriverException
 
-print("🚀 SELENIUM İLE GELİŞMİŞ CRAWLER ANALİZ SİSTEMİ BAŞLATILIYOR...")
+print("🚀 AKILLI CRAWLER ANALİZ SİSTEMİ BAŞLATILIYOR...")
 
 # Logging setup
 logging.basicConfig(
@@ -32,120 +26,130 @@ class Config:
     def __init__(self):
         self.MAX_RESULTS = 3
         self.REQUEST_TIMEOUT = 30
-        self.SELENIUM_TIMEOUT = 45
+        self.RETRY_ATTEMPTS = 3
         self.USER_AGENTS = [
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/121.0",
         ]
 
-class SeleniumCrawler:
+class SmartCrawler:
     def __init__(self, config):
         self.config = config
-        self.driver = None
     
-    def init_driver(self):
-        """Selenium driver'ı başlat"""
-        try:
-            chrome_options = Options()
-            chrome_options.add_argument('--headless=new')
-            chrome_options.add_argument('--no-sandbox')
-            chrome_options.add_argument('--disable-dev-shm-usage')
-            chrome_options.add_argument('--disable-gpu')
-            chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-            chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-            chrome_options.add_experimental_option('useAutomationExtension', False)
-            chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-            
-            # Chrome path'ini belirt
-            chrome_options.binary_location = '/usr/bin/google-chrome'
-            
-            self.driver = webdriver.Chrome(options=chrome_options)
-            self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-            
-            print("✅ Selenium driver başlatıldı")
-            return True
-        except Exception as e:
-            print(f"❌ Selenium driver başlatma hatası: {e}")
-            return False
-    
-    def crawl_with_selenium(self, url, target_country):
-        """Selenium ile sayfayı crawl et"""
-        if not self.driver and not self.init_driver():
-            return {'country_found': False, 'gtip_codes': [], 'content_preview': ''}
+    def smart_crawl(self, url, target_country):
+        """Akıllı crawl - farklı teknikler dener"""
+        print(f"   🌐 Sayfa analiz ediliyor: {url}")
         
+        # Önce basit requests ile dene
+        result = self._crawl_with_requests(url, target_country)
+        if result['status_code'] == 200:
+            return result
+        
+        # 403 alırsa, farklı headers ile tekrar dene
+        print(f"   ⚠️  403 hatası, farklı approach deneniyor: {url}")
+        result = self._crawl_with_advanced_headers(url, target_country)
+        if result['status_code'] == 200:
+            return result
+        
+        # Hala başarısızsa, sadece DuckDuckGo snippet'ini kullan
+        print(f"   ⚠️  Sayfaya erişilemedi, snippet analizi yapılacak")
+        return {'country_found': False, 'gtip_codes': [], 'content_preview': 'Sayfaya erişilemedi - Snippet analizi yapıldı', 'status_code': 'SNIPPET_ONLY'}
+    
+    def _crawl_with_requests(self, url, target_country):
+        """Basit requests ile crawl"""
         try:
-            print(f"   🌐 Selenium ile sayfa açılıyor: {url}")
-            
-            # Sayfayı aç
-            self.driver.get(url)
-            
-            # Sayfanın yüklenmesini bekle
-            WebDriverWait(self.driver, self.config.SELENIUM_TIMEOUT).until(
-                EC.presence_of_element_located((By.TAG_NAME, "body"))
-            )
-            
-            # Rastgele scroll ve bekleme (insan benzeri davranış)
-            self._human_like_behavior()
-            
-            # Sayfa içeriğini al
-            page_source = self.driver.page_source
-            soup = BeautifulSoup(page_source, 'html.parser')
-            
-            # Script ve style tag'lerini temizle
-            for script in soup(["script", "style", "nav", "header", "footer"]):
-                script.decompose()
-            
-            # Tüm metni al
-            text_content = soup.get_text()
-            lines = (line.strip() for line in text_content.splitlines())
-            chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-            cleaned_content = ' '.join(chunk for chunk in chunks if chunk)
-            
-            text_lower = cleaned_content.lower()
-            
-            # Ülke ismini ara
-            country_found = target_country.lower() in text_lower
-            
-            # GTIP/HS kodlarını ara
-            gtip_codes = self.extract_gtip_codes(cleaned_content)
-            
-            content_preview = cleaned_content[:400] + "..." if len(cleaned_content) > 400 else cleaned_content
-            
-            print(f"   🔍 Selenium analizi: Ülke bulundu={country_found}, GTIP kodları={gtip_codes}")
-            
-            return {
-                'country_found': country_found,
-                'gtip_codes': gtip_codes,
-                'content_preview': content_preview,
-                'status_code': 200
+            headers = {
+                'User-Agent': random.choice(self.config.USER_AGENTS),
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
             }
             
-        except TimeoutException:
-            print(f"   ❌ Selenium timeout: {url}")
-            return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'TIMEOUT'}
+            response = requests.get(url, headers=headers, timeout=self.config.REQUEST_TIMEOUT)
+            
+            if response.status_code == 200:
+                return self._parse_content(response.text, url, target_country, response.status_code)
+            else:
+                return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': response.status_code}
+                
         except Exception as e:
-            print(f"   ❌ Selenium hatası {url}: {e}")
+            print(f"   ❌ Crawl hatası: {e}")
             return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'ERROR'}
     
-    def _human_like_behavior(self):
-        """İnsan benzeri davranış simülasyonu"""
+    def _crawl_with_advanced_headers(self, url, target_country):
+        """Gelişmiş headers ile crawl"""
         try:
-            # Rastgele scroll
-            scroll_height = self.driver.execute_script("return document.body.scrollHeight")
-            random_scroll = random.randint(100, min(800, scroll_height))
-            self.driver.execute_script(f"window.scrollTo(0, {random_scroll});")
+            print(f"   🔧 Gelişmiş headers ile deneniyor...")
             
-            # Rastgele bekleme
-            time.sleep(random.uniform(2, 4))
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Cache-Control': 'max-age=0',
+            }
             
-            # Tekrar scroll
-            random_scroll_2 = random.randint(200, min(1200, scroll_height))
-            self.driver.execute_script(f"window.scrollTo(0, {random_scroll_2});")
+            # Session kullan
+            session = requests.Session()
+            session.headers.update(headers)
             
-            time.sleep(random.uniform(1, 2))
+            response = session.get(url, timeout=self.config.REQUEST_TIMEOUT)
             
+            if response.status_code == 200:
+                return self._parse_content(response.text, url, target_country, response.status_code)
+            else:
+                return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': response.status_code}
+                
         except Exception as e:
-            print(f"   ⚠️ Scroll hatası: {e}")
+            print(f"   ❌ Gelişmiş crawl hatası: {e}")
+            return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'ERROR'}
+    
+    def _parse_content(self, html, url, target_country, status_code):
+        """Sayfa içeriğini parse et"""
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        # Script ve style tag'lerini temizle
+        for script in soup(["script", "style", "nav", "header", "footer"]):
+            script.decompose()
+        
+        # Meta description'ı da al
+        meta_desc = soup.find('meta', attrs={'name': 'description'})
+        meta_content = meta_desc.get('content', '') if meta_desc else ''
+        
+        # Tüm metni al
+        text_content = soup.get_text()
+        combined_content = f"{meta_content} {text_content}"
+        
+        # Temizleme
+        lines = (line.strip() for line in combined_content.splitlines())
+        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+        cleaned_content = ' '.join(chunk for chunk in chunks if chunk)
+        
+        text_lower = cleaned_content.lower()
+        
+        # Ülke ismini ara
+        country_found = target_country.lower() in text_lower
+        
+        # GTIP/HS kodlarını ara
+        gtip_codes = self.extract_gtip_codes(cleaned_content)
+        
+        content_preview = cleaned_content[:400] + "..." if len(cleaned_content) > 400 else cleaned_content
+        
+        print(f"   🔍 Sayfa analizi: Ülke bulundu={country_found}, GTIP kodları={gtip_codes}")
+        
+        return {
+            'country_found': country_found,
+            'gtip_codes': gtip_codes,
+            'content_preview': content_preview,
+            'status_code': status_code
+        }
     
     def extract_gtip_codes(self, text):
         """Metinden GTIP/HS kodlarını çıkar"""
@@ -189,15 +193,6 @@ class SeleniumCrawler:
                     all_codes.add(num)
         
         return list(all_codes)
-    
-    def close_driver(self):
-        """Driver'ı kapat"""
-        if self.driver:
-            try:
-                self.driver.quit()
-                print("✅ Selenium driver kapatıldı")
-            except Exception as e:
-                print(f"⚠️ Driver kapatma hatası: {e}")
 
 class DuckDuckGoSearcher:
     def __init__(self, config):
@@ -267,7 +262,8 @@ class DuckDuckGoSearcher:
                 results.append({
                     'title': title,
                     'url': url,
-                    'snippet': snippet
+                    'snippet': snippet,
+                    'full_text': f"{title} {snippet}"  # Snippet analizi için
                 })
                 
                 print(f"   📄 Bulunan sonuç: {title[:60]}...")
@@ -337,12 +333,12 @@ class AdvancedTradeAnalyzer:
     def __init__(self, config):
         self.config = config
         self.searcher = DuckDuckGoSearcher(config)
-        self.crawler = SeleniumCrawler(config)
+        self.crawler = SmartCrawler(config)
         self.eur_lex_checker = EURLexChecker(config)
     
     def analyze_company_country(self, company, country):
         """Şirket-ülke analizi yap"""
-        print(f"🤖 SELENIUM ANALİZİ BAŞLATILIYOR: {company} ↔ {country}")
+        print(f"🤖 AKILLI ANALİZ BAŞLATILIYOR: {company} ↔ {country}")
         
         search_queries = [
             f"{company} {country} export",
@@ -365,12 +361,20 @@ class AdvancedTradeAnalyzer:
                 for j, result in enumerate(search_results, 1):
                     print(f"   📄 Sonuç {j} analiz ediliyor: {result['title'][:50]}...")
                     
-                    # Selenium ile crawl et
-                    crawl_result = self.crawler.crawl_with_selenium(result['url'], country)
+                    # Akıllı crawl et
+                    crawl_result = self.crawler.smart_crawl(result['url'], country)
+                    
+                    # Eğer sayfaya erişilemediyse, snippet'ten GTIP kodlarını çıkar
+                    if crawl_result['status_code'] != 200 and 'full_text' in result:
+                        snippet_gtips = self.crawler.extract_gtip_codes(result['full_text'])
+                        if snippet_gtips:
+                            crawl_result['gtip_codes'] = snippet_gtips
+                            crawl_result['content_preview'] = 'Snippet analizi: ' + result['snippet'][:200]
+                            print(f"   🔍 Snippet'ten GTIP kodları çıkarıldı: {snippet_gtips}")
                     
                     # EUR-Lex kontrolü
                     sanctioned_gtips = []
-                    if crawl_result['country_found'] and crawl_result['gtip_codes']:
+                    if crawl_result['gtip_codes']:
                         print(f"   🔍 EUR-Lex kontrolü yapılıyor...")
                         sanctioned_gtips = self.eur_lex_checker.check_gtip_in_eur_lex(crawl_result['gtip_codes'])
                     
@@ -383,16 +387,13 @@ class AdvancedTradeAnalyzer:
                 
                 # Sorgular arasında bekleme
                 if i < len(search_queries):
-                    delay = random.uniform(3, 6)
+                    delay = random.uniform(2, 4)
                     print(f"   ⏳ {delay:.1f} saniye bekleniyor (sorgular arası)...")
                     time.sleep(delay)
                 
             except Exception as e:
                 print(f"   ❌ Sorgu hatası: {e}")
                 continue
-        
-        # Driver'ı temizle
-        self.crawler.close_driver()
         
         return all_results
     
@@ -435,17 +436,17 @@ class AdvancedTradeAnalyzer:
             'ÖZET': search_result['snippet'],
             'CONTENT_PREVIEW': crawl_result['content_preview'],
             'STATUS_CODE': crawl_result.get('status_code', 'N/A'),
-            'CRAWLER_TIPI': 'SELENIUM'
+            'CRAWLER_TIPI': 'AKILLI_CRAWLER'
         }
 
 def create_excel_report(results, company, country):
     """Excel raporu oluştur"""
     try:
-        filename = f"{company.replace(' ', '_')}_{country}_selenium_analiz.xlsx"
+        filename = f"{company.replace(' ', '_')}_{country}_akilli_analiz.xlsx"
         
         wb = Workbook()
         ws = wb.active
-        ws.title = "Selenium Analiz Sonuçları"
+        ws.title = "Akıllı Analiz Sonuçları"
         
         headers = [
             'ŞİRKET', 'ÜLKE', 'DURUM', 'YAPTIRIM_RISKI', 'ULKE_BAGLANTISI',
@@ -493,7 +494,7 @@ def create_excel_report(results, company, country):
 def display_results(results, company, country):
     """Sonuçları ekranda göster"""
     print(f"\n{'='*80}")
-    print(f"📊 SELENIUM ANALİZ SONUÇLARI: {company} ↔ {country}")
+    print(f"📊 AKILLI ANALİZ SONUÇLARI: {company} ↔ {country}")
     print(f"{'='*80}")
     
     if not results:
@@ -510,7 +511,7 @@ def display_results(results, company, country):
     print(f"   • Ülke Bağlantısı: {country_connection_count}")
     print(f"   • YÜKSEK Yaptırım Riski: {high_risk_count}")
     print(f"   • ORTA Risk: {medium_risk_count}")
-    print(f"   • Crawler Tipi: SELENIUM (Gerçek Tarayıcı)")
+    print(f"   • Crawler Tipi: AKILLI CRAWLER (403 Atlama)")
     
     if high_risk_count > 0:
         print(f"\n⚠️  KRİTİK YAPTIRIM UYARISI:")
@@ -537,10 +538,10 @@ def display_results(results, company, country):
         print(f"   {'─'*60}")
 
 def main():
-    print("📊 SELENIUM İLE GELİŞMİŞ CRAWLER ANALİZ SİSTEMİ")
-    print("🌐 ÖZELLİK: Gerçek Chrome Tarayıcı + Bot Koruması Atlama")
-    print("💡 NOT: Bu versiyon Cloudflare ve 403 hatalarını aşmak için Selenium kullanır!")
-    print("🚨 UYARI: Chrome kurulumu gerektirir, ilk başlama biraz yavaş olabilir\n")
+    print("📊 AKILLI CRAWLER ANALİZ SİSTEMİ")
+    print("🌐 ÖZELLİK: 403 Hata Atlama + Snippet Analizi")
+    print("💡 AVANTAJ: Selenium gerekmez, hızlı çalışır, Docker sorunu yok!")
+    print("🎯 STRATEJİ: Önce basit, sonra gelişmiş headers, en son snippet analizi\n")
     
     # Yapılandırma
     config = Config()
@@ -554,10 +555,10 @@ def main():
         print("❌ Şirket ve ülke bilgisi gereklidir!")
         return
     
-    print(f"\n🚀 SELENIUM ANALİZİ BAŞLATILIYOR: {company} ↔ {country}")
-    print("⏳ Gerçek Chrome tarayıcı başlatılıyor...")
-    print("   Bu işlem Cloudflare ve bot korumalarını aşacak!")
-    print("   Selenium ile sayfalar gerçek tarayıcıda açılacak...\n")
+    print(f"\n🚀 AKILLI ANALİZ BAŞLATILIYOR: {company} ↔ {country}")
+    print("⏳ DuckDuckGo'da arama yapılıyor...")
+    print("   Akıllı crawler 403 hatalarını aşmaya çalışacak!")
+    print("   Sayfalara erişilemezse snippet analizi yapılacak...\n")
     
     start_time = time.time()
     results = analyzer.analyze_company_country(company, country)
