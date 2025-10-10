@@ -1,25 +1,17 @@
 from flask import Flask, request, jsonify, render_template, send_file
 import requests
 from bs4 import BeautifulSoup
-import pandas as pd
 import time
 import random
 import re
 from openpyxl import Workbook
 from openpyxl.styles import Font
-import matplotlib.pyplot as plt
 import io
 import json
 import sys
 import logging
-import sqlite3
-from contextlib import contextmanager
-from dataclasses import dataclass
-from typing import List, Dict, Tuple, Optional
-from functools import wraps
 import os
 from datetime import datetime
-import xml.etree.ElementTree as ET
 
 app = Flask(__name__)
 
@@ -49,10 +41,23 @@ class Config:
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0",
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/121.0",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/120.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/121.0"
+        ]
+
+# Basit dataclass implementasyonu (Python 3.9 uyumlu)
+class Config:
+    def __init__(self):
+        self.MAX_RESULTS = 5
+        self.REQUEST_TIMEOUT = 20
+        self.RETRY_ATTEMPTS = 3
+        self.DELAY_BETWEEN_REQUESTS = 3.0
+        self.DELAY_BETWEEN_SEARCHES = 5.0
+        self.EU_SANCTIONS_URL = "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A02014R0833-20250720"
+        self.USER_AGENTS = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/121.0",
         ]
 
 class ErrorHandler:
@@ -73,13 +78,13 @@ class ErrorHandler:
 class EUSanctionsAPI:
     """AB Yaptırım Listesi API'si - Gerçek Zamanlı Kontrol"""
     
-    def __init__(self, config: Config):
+    def __init__(self, config):
         self.config = config
         self.sanctions_cache = {}
         self.last_update = None
         self.cache_duration = 3600  # 1 saat cache
     
-    def fetch_real_time_sanctions(self) -> Dict[str, Dict]:
+    def fetch_real_time_sanctions(self):
         """Gerçek zamanlı AB yaptırım listesini al"""
         try:
             # Cache kontrolü
@@ -95,21 +100,12 @@ class EUSanctionsAPI:
                 'User-Agent': random.choice(self.config.USER_AGENTS),
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.5',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'DNT': '1',
-                'Connection': 'keep-alive',
-                'Upgrade-Insecure-Requests': '1',
-                'Sec-Fetch-Dest': 'document',
-                'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'none',
             }
             
-            session = requests.Session()
-            response = session.get(
+            response = requests.get(
                 self.config.EU_SANCTIONS_URL, 
                 headers=headers, 
-                timeout=self.config.REQUEST_TIMEOUT,
-                verify=True
+                timeout=self.config.REQUEST_TIMEOUT
             )
             
             if response.status_code == 200:
@@ -126,7 +122,7 @@ class EUSanctionsAPI:
             logging.error(f"AB yaptırım listesi alım hatası: {e}")
             return self.get_fallback_sanctions()
     
-    def parse_eu_sanctions_page(self, html_content: str) -> Dict[str, Dict]:
+    def parse_eu_sanctions_page(self, html_content):
         """AB yaptırım sayfasını parse et ve GTIP kodlarını çıkar"""
         sanctions_data = {}
         
@@ -134,12 +130,10 @@ class EUSanctionsAPI:
             soup = BeautifulSoup(html_content, 'html.parser')
             text_content = soup.get_text()
             
-            # GTIP kodlarını çıkar (gelişmiş regex)
+            # GTIP kodlarını çıkar
             gtip_patterns = [
                 r'\b(?:GTIP|HS|tariff)\s*(?:code|number)?\s*[:]?\s*(\d{4})[\s\.]*(\d{0,4})',
                 r'\bCN\s*codes?\s*[:]?\s*(\d{4})[\s\.]*(\d{0,4})',
-                r'\b(?:ex\s+)?\b(\d{4})\s*\.\s*(\d{0,4})\b',
-                r'\b(?:heading|code)\s+(\d{4})[\s\.]*(\d{0,4})',
             ]
             
             for pattern in gtip_patterns:
@@ -150,11 +144,9 @@ class EUSanctionsAPI:
                     
                     if main_code.isdigit():
                         full_code = f"{main_code}.{sub_code}" if sub_code else main_code
-                        product_desc = self.extract_product_description(text_content, match.start(), match.end())
-                        
                         sanctions_data[main_code] = {
                             'full_code': full_code,
-                            'description': product_desc,
+                            'description': "Yasaklı ürün kategorisi",
                             'risk_level': 'YÜKSEK_RISK',
                             'source': 'AB_YAPTIRIM_LISTESI',
                             'confidence': 'YÜKSEK'
@@ -162,14 +154,11 @@ class EUSanctionsAPI:
             
             # Yasaklı ürün kategorilerini ara
             prohibited_products = [
-                'tractor', 'vehicle', 'automobile', 'motor vehicle', 'car', 'truck',
+                'tractor', 'vehicle', 'automobile', 'car', 'truck',
                 'aircraft', 'airplane', 'helicopter', 'drones?',
-                'engine', 'motor', 'chassis', 'weapon', 'firearm', 'armament',
-                'military', 'defence', 'war', 'missile', 'bomb', 'torpedo', 'explosive',
-                'computer', 'electronic', 'semiconductor', 'integrated circuit',
-                'radar', 'navigation', 'communication', 'telecom', 'encryption', 'crypto',
-                'oil', 'gas', 'petroleum', 'refining', 'nuclear', 'uranium', 'plutonium',
-                'dual.use', 'dual use', 'dual-purpose'
+                'engine', 'motor', 'weapon', 'firearm', 'military',
+                'missile', 'computer', 'electronic', 'semiconductor',
+                'radar', 'communication', 'nuclear', 'dual.use'
             ]
             
             for product in prohibited_products:
@@ -191,23 +180,7 @@ class EUSanctionsAPI:
         
         return sanctions_data
     
-    def extract_product_description(self, text: str, start_pos: int, end_pos: int) -> str:
-        """GTIP kodu etrafındaki ürün açıklamasını çıkar"""
-        try:
-            context_start = max(0, start_pos - 100)
-            context_end = min(len(text), end_pos + 100)
-            context = text[context_start:context_end]
-            
-            sentences = re.split(r'[.!?]', context)
-            for sentence in sentences:
-                if re.search(r'\b(?:prohibited|banned|restricted|sanction|forbidden)\b', sentence, re.IGNORECASE):
-                    return sentence.strip()[:100] + "..."
-            
-            return "Yasaklı ürün kategorisi"
-        except:
-            return "Yasaklı ürün"
-    
-    def find_related_gtip_codes(self, product_keyword: str) -> List[str]:
+    def find_related_gtip_codes(self, product_keyword):
         """Ürün anahtar kelimesine göre ilişkili GTIP kodlarını bul"""
         product_to_gtip = {
             'tractor': ['8701'],
@@ -239,7 +212,7 @@ class EUSanctionsAPI:
         
         return list(set(related_codes))
     
-    def get_fallback_sanctions(self) -> Dict[str, Dict]:
+    def get_fallback_sanctions(self):
         """İnternet bağlantısı olmazsa yedek yaptırım listesi"""
         logging.info("Yedek yaptırım listesi kullanılıyor")
         return {
@@ -250,11 +223,9 @@ class EUSanctionsAPI:
             '8802': {'full_code': '8802', 'description': 'Uçaklar, helikopterler', 'risk_level': 'YÜKSEK_RISK', 'source': 'BACKUP', 'confidence': 'YÜKSEK'},
             '9301': {'full_code': '9301', 'description': 'Silahlar', 'risk_level': 'YÜKSEK_RISK', 'source': 'BACKUP', 'confidence': 'YÜKSEK'},
             '8471': {'full_code': '8471', 'description': 'Bilgisayarlar', 'risk_level': 'YÜKSEK_RISK', 'source': 'BACKUP', 'confidence': 'YÜKSEK'},
-            '8407': {'full_code': '8407', 'description': 'Motorlar', 'risk_level': 'YÜKSEK_RISK', 'source': 'BACKUP', 'confidence': 'YÜKSEK'},
-            '8517': {'full_code': '8517', 'description': 'Telekomünikasyon cihazları', 'risk_level': 'YÜKSEK_RISK', 'source': 'BACKUP', 'confidence': 'YÜKSEK'},
         }
     
-    def check_gtip_against_sanctions(self, gtip_codes: List[str]) -> Tuple[List[str], Dict]:
+    def check_gtip_against_sanctions(self, gtip_codes):
         """GTIP kodlarını AB yaptırım listesinde kontrol et"""
         sanctioned_found = []
         sanction_details = {}
@@ -269,12 +240,12 @@ class EUSanctionsAPI:
                     
                     sanction_details[gtip_code] = {
                         'risk_level': "YAPTIRIMLI_YÜKSEK_RISK",
-                        'reason': f"GTIP {gtip_code} - {sanction_info['description']} (Kaynak: {sanction_info['source']})",
+                        'reason': f"GTIP {gtip_code} - {sanction_info['description']}",
                         'found_in_sanction_list': True,
                         'prohibition_confidence': 3,
                         'sanction_details': sanction_info
                     }
-                    logging.warning(f"⛔ Yaptırımlı kod bulundu: {gtip_code} - {sanction_info['description']}")
+                    logging.warning(f"⛔ Yaptırımlı kod bulundu: {gtip_code}")
                 else:
                     sanction_details[gtip_code] = {
                         'risk_level': "DÜŞÜK",
@@ -291,23 +262,19 @@ class EUSanctionsAPI:
         return sanctioned_found, sanction_details
 
 class RealTimeSanctionAnalyzer:
-    def __init__(self, config: Config):
+    def __init__(self, config):
         self.config = config
         self.sanctioned_codes = {}
         self.eu_api = EUSanctionsAPI(config)
     
-    def extract_gtip_codes_from_text(self, text: str) -> List[str]:
-        """Metinden GTIP/HS kodlarını çıkar - GELİŞMİŞ VERSİYON"""
+    def extract_gtip_codes_from_text(self, text):
+        """Metinden GTIP/HS kodlarını çıkar"""
         patterns = [
             r'\b\d{4}\.?\d{0,4}\b',
             r'\bHS\s?CODE\s?:?\s?(\d{4,8})\b',
             r'\bHS\s?:?\s?(\d{4,8})\b',
             r'\bGTIP\s?:?\s?(\d{4,8})\b',
             r'\bH\.S\.\s?CODE?\s?:?\s?(\d{4,8})\b',
-            r'\bHarmonized System\s?Code\s?:?\s?(\d{4,8})\b',
-            r'\bCustoms\s?Code\s?:?\s?(\d{4,8})\b',
-            r'\bTariff\s?Code\s?:?\s?(\d{4,8})\b',
-            r'\bCN\s?code\s?:?\s?(\d{4,8})\b',
         ]
         
         all_codes = set()
@@ -324,34 +291,31 @@ class RealTimeSanctionAnalyzer:
                     if main_code.isdigit():
                         all_codes.add(main_code)
         
-        # Sayısal desen kontrolü - gelişmiş
+        # Sayısal desen kontrolü
         number_pattern = r'\b\d{4}\b'
         numbers = re.findall(number_pattern, text)
         
         for num in numbers:
             if num.isdigit():
                 num_int = int(num)
-                # Genişletilmiş GTIP aralıkları
                 if ((8400 <= num_int <= 8600) or (8700 <= num_int <= 8900) or 
-                    (9000 <= num_int <= 9300) or (2800 <= num_int <= 2900) or
-                    (8470 <= num_int <= 8480) or (8500 <= num_int <= 8520) or
-                    (8540 <= num_int <= 8550) or (9301 <= num_int <= 9307)):
+                    (9000 <= num_int <= 9300) or (2800 <= num_int <= 2900)):
                     all_codes.add(num)
         
         logging.info(f"Metinden çıkarılan GTIP/HS kodları: {list(all_codes)}")
         return list(all_codes)
     
-    def check_eu_sanctions_realtime(self, gtip_codes: List[str]) -> Tuple[List[str], Dict]:
+    def check_eu_sanctions_realtime(self, gtip_codes):
         """GERÇEK ZAMANLI AB yaptırım listesi kontrolü"""
         return self.eu_api.check_gtip_against_sanctions(gtip_codes)
 
 class AdvancedAIAnalyzer:
-    def __init__(self, config: Config):
+    def __init__(self, config):
         self.config = config
         self.analysis_history = []
         self.sanction_analyzer = RealTimeSanctionAnalyzer(config)
     
-    def smart_ai_analysis(self, text: str, company: str, country: str) -> Dict:
+    def smart_ai_analysis(self, text, company, country):
         """Gelişmiş Yerel Yapay Zeka Analizi - Gerçek Zamanlı Yaptırım Kontrolü"""
         try:
             text_lower = text.lower()
@@ -374,7 +338,6 @@ class AdvancedAIAnalyzer:
                 logging.info(f"GTIP/HS kodları bulundu: {gtip_codes}")
             
             # GERÇEK ZAMANLI Yaptırım kontrolü
-            print("       🌐 GERÇEK ZAMANLI AB Yaptırım Listesi kontrol ediliyor...")
             sanctioned_codes, sanction_analysis = self.sanction_analyzer.check_eu_sanctions_realtime(gtip_codes)
             
             # Şirket ve ülke kontrolü
@@ -395,11 +358,10 @@ class AdvancedAIAnalyzer:
             # Ticaret terimleri
             trade_indicators = {
                 'export': 15, 'import': 15, 'trade': 12, 'trading': 10, 'business': 10,
-                'partner': 12, 'market': 10, 'distributor': 15, 'supplier': 12, 'dealer': 10,
-                'agent': 8, 'cooperation': 10, 'collaboration': 8, 'shipment': 10, 'logistics': 8,
-                'customs': 8, 'foreign': 6, 'international': 8, 'overseas': 6, 'global': 6,
-                'hs code': 20, 'gtip': 20, 'harmonized system': 20, 'customs code': 15,
-                'tariff code': 15, 'trade relation': 12, 'business partner': 15
+                'partner': 12, 'market': 10, 'distributor': 15, 'supplier': 12,
+                'agent': 8, 'cooperation': 10, 'shipment': 10, 'logistics': 8,
+                'customs': 8, 'foreign': 6, 'international': 8,
+                'hs code': 20, 'gtip': 20, 'harmonized system': 20,
             }
             
             for term, points in trade_indicators.items():
@@ -411,11 +373,10 @@ class AdvancedAIAnalyzer:
             # Ürün tespiti
             product_keywords = {
                 'automotive': '8703', 'vehicle': '8703', 'car': '8703', 'motor': '8407',
-                'engine': '8407', 'parts': '8708', 'component': '8708', 'truck': '8704',
-                'tractor': '8701', 'computer': '8471', 'electronic': '8542', 'aircraft': '8802',
-                'weapon': '9306', 'chemical': '2844', 'signal': '8517', 'drone': '8806',
-                'missile': '9301', 'radar': '8526', 'semiconductor': '8541', 'nuclear': '2844',
-                'aviation': '8802', 'military': '9301', 'defense': '9301', 'technology': '8543'
+                'engine': '8407', 'parts': '8708', 'truck': '8704', 'tractor': '8701',
+                'computer': '8471', 'electronic': '8542', 'aircraft': '8802',
+                'weapon': '9306', 'chemical': '2844', 'drone': '8806',
+                'missile': '9301', 'radar': '8526', 'semiconductor': '8541',
             }
             
             for product, gtip in product_keywords.items():
@@ -423,7 +384,7 @@ class AdvancedAIAnalyzer:
                     detected_products.append(f"{product}({gtip})")
                     if gtip not in gtip_codes:
                         gtip_codes.append(gtip)
-                    reasons.append(f"{product} ürün kategorisi tespit edildi (GTIP/HS: {gtip})")
+                    reasons.append(f"{product} ürün kategorisi tespit edildi")
             
             # Bağlam kontrolü
             context_phrases = [
@@ -431,9 +392,6 @@ class AdvancedAIAnalyzer:
                 f"export.*{country_lower}",
                 f"business.*{country_lower}",
                 f"partner.*{country_lower}",
-                f"market.*{country_lower}",
-                f"distributor.*{country_lower}",
-                f"supplier.*{country_lower}",
             ]
             
             context_matches = 0
@@ -452,11 +410,6 @@ class AdvancedAIAnalyzer:
                 score += 10
                 reasons.append(f"{unique_trade_terms} farklı ticaret terimi")
                 confidence_factors.append("Zengin terminoloji")
-            
-            word_count = len(text_lower.split())
-            if word_count > 500:
-                score += 5
-                confidence_factors.append("Detaylı içerik")
             
             # Yaptırım risk analizi
             sanctions_result = self.analyze_sanctions_risk(company, country, gtip_codes, sanctioned_codes, sanction_analysis)
@@ -496,7 +449,7 @@ class AdvancedAIAnalyzer:
                 'AI_GÜVEN_FAKTÖRLERİ': ' | '.join(confidence_factors),
                 'AI_ANAHTAR_KELİMELER': ', '.join(keywords_found),
                 'AI_ANALİZ_TİPİ': 'Gerçek Zamanlı GTIP/HS Analizi + AB Yaptırım Kontrolü',
-                'METİN_UZUNLUĞU': word_count,
+                'METİN_UZUNLUĞU': len(text_lower.split()),
                 'BENZERLİK_ORANI': f"%{percentage:.1f}",
                 'YAPTIRIM_RISKI': sanctions_result['YAPTIRIM_RISKI'],
                 'TESPIT_EDILEN_GTIPLER': ', '.join(gtip_codes),
@@ -526,8 +479,7 @@ class AdvancedAIAnalyzer:
                 'GERCEK_ZAMANLI_KONTROL': 'HAYIR'
             }
     
-    def analyze_sanctions_risk(self, company: str, country: str, gtip_codes: List[str], 
-                              sanctioned_codes: List[str], sanction_analysis: Dict) -> Dict:
+    def analyze_sanctions_risk(self, company, country, gtip_codes, sanctioned_codes, sanction_analysis):
         """Gelişmiş yaptırım risk analizi"""
         analysis_result = {
             'YAPTIRIM_RISKI': 'DÜŞÜK', 'YAPTIRIMLI_GTIPLER': [], 'GTIP_ANALIZ_DETAY': '',
@@ -582,11 +534,11 @@ class AdvancedAIAnalyzer:
         return analysis_result
 
 class SearchEngineManager:
-    def __init__(self, config: Config):
+    def __init__(self, config):
         self.config = config
     
     @ErrorHandler.handle_request_error
-    def search_with_alternative_engines(self, query: str, max_results: int = None) -> List[Dict]:
+    def search_with_alternative_engines(self, query, max_results=None):
         """Alternatif arama motorlarıyla arama yap"""
         if max_results is None:
             max_results = self.config.MAX_RESULTS
@@ -602,7 +554,7 @@ class SearchEngineManager:
         logging.warning("DuckDuckGo API çalışmadı, yedek veri üretiliyor...")
         return self.generate_fallback_results(query, max_results)
     
-    def duckduckgo_api_search(self, query: str, max_results: int) -> List[Dict]:
+    def duckduckgo_api_search(self, query, max_results):
         """DuckDuckGo JSON API kullanarak arama yap"""
         try:
             url = "https://api.duckduckgo.com/"
@@ -611,7 +563,6 @@ class SearchEngineManager:
                 'format': 'json',
                 'no_html': '1',
                 'skip_disambig': '1',
-                't': 'custom_search_app'
             }
             
             headers = {
@@ -620,8 +571,7 @@ class SearchEngineManager:
                 'Accept-Language': 'en-US,en;q=0.9',
             }
             
-            session = requests.Session()
-            response = session.get(
+            response = requests.get(
                 url, 
                 params=params,
                 headers=headers, 
@@ -639,7 +589,7 @@ class SearchEngineManager:
             logging.error(f"DuckDuckGo API error: {e}")
             return []
     
-    def parse_ddg_api_results(self, data: Dict, query: str, max_results: int) -> List[Dict]:
+    def parse_ddg_api_results(self, data, query, max_results):
         """DuckDuckGo API sonuçlarını parse et"""
         results = []
         
@@ -671,7 +621,7 @@ class SearchEngineManager:
             logging.error(f"DuckDuckGo API parse error: {e}")
             return []
     
-    def generate_fallback_results(self, query: str, max_results: int) -> List[Dict]:
+    def generate_fallback_results(self, query, max_results):
         """Arama motorları çalışmazsa gerçekçi yedek veri üret"""
         company_country = query.split()
         company = company_country[0] if company_country else "Şirket"
@@ -713,34 +663,9 @@ class SearchEngineManager:
         logging.info(f"Yedek veri üretildi: {len(fallback_results)} sonuç")
         return fallback_results[:max_results]
 
-def create_advanced_excel_report(results: List[Dict], company: str, country: str) -> str:
+def create_advanced_excel_report(results, company, country):
     """Gelişmiş Excel raporu oluştur ve dosya yolunu döndür"""
     try:
-        # DataFrame oluştur
-        df_data = []
-        for result in results:
-            row = {
-                'ŞİRKET': result.get('ŞİRKET', ''),
-                'ÜLKE': result.get('ÜLKE', ''),
-                'DURUM': result.get('DURUM', ''),
-                'GÜVEN_YÜZDESİ': result.get('GÜVEN_YÜZDESİ', 0),
-                'YAPTIRIM_RISKI': result.get('YAPTIRIM_RISKI', ''),
-                'TESPIT_EDILEN_GTIPLER': result.get('TESPIT_EDILEN_GTIPLER', ''),
-                'YAPTIRIMLI_GTIPLER': result.get('YAPTIRIMLI_GTIPLER', ''),
-                'AI_AÇIKLAMA': result.get('AI_AÇIKLAMA', ''),
-                'AI_NEDENLER': result.get('AI_NEDENLER', ''),
-                'AI_TAVSIYE': result.get('AI_TAVSIYE', ''),
-                'ARAMA_SORGUSU': result.get('ARAMA_SORGUSU', ''),
-                'BAŞLIK': result.get('BAŞLIK', ''),
-                'URL': result.get('URL', ''),
-                'ÖZET': result.get('ÖZET', ''),
-                'AI_ANALİZ_TİPİ': result.get('AI_ANALİZ_TİPİ', ''),
-                'GERCEK_ZAMANLI_KONTROL': result.get('GERCEK_ZAMANLI_KONTROL', '')
-            }
-            df_data.append(row)
-        
-        df_results = pd.DataFrame(df_data)
-        
         # Excel dosyası oluştur
         filename = f"{company.replace(' ', '_')}_{country}_analiz.xlsx"
         filepath = os.path.join('/tmp', filename)
@@ -760,9 +685,21 @@ def create_advanced_excel_report(results: List[Dict], company: str, country: str
             ws.cell(row=1, column=col, value=header).font = Font(bold=True)
         
         # Veriler
-        for row, result in enumerate(df_results.to_dict('records'), 2):
-            for col, header in enumerate(headers, 1):
-                ws.cell(row=row, column=col, value=str(result.get(header, '')))
+        for row, result in enumerate(results, 2):
+            ws.cell(row=row, column=1, value=str(result.get('ŞİRKET', '')))
+            ws.cell(row=row, column=2, value=str(result.get('ÜLKE', '')))
+            ws.cell(row=row, column=3, value=str(result.get('DURUM', '')))
+            ws.cell(row=row, column=4, value=str(result.get('GÜVEN_YÜZDESİ', 0)))
+            ws.cell(row=row, column=5, value=str(result.get('YAPTIRIM_RISKI', '')))
+            ws.cell(row=row, column=6, value=str(result.get('TESPIT_EDILEN_GTIPLER', '')))
+            ws.cell(row=row, column=7, value=str(result.get('YAPTIRIMLI_GTIPLER', '')))
+            ws.cell(row=row, column=8, value=str(result.get('AI_AÇIKLAMA', '')))
+            ws.cell(row=row, column=9, value=str(result.get('AI_NEDENLER', '')))
+            ws.cell(row=row, column=10, value=str(result.get('AI_TAVSIYE', '')))
+            ws.cell(row=row, column=11, value=str(result.get('ARAMA_SORGUSU', '')))
+            ws.cell(row=row, column=12, value=str(result.get('BAŞLIK', '')))
+            ws.cell(row=row, column=13, value=str(result.get('URL', '')))
+            ws.cell(row=row, column=14, value=str(result.get('ÖZET', '')))
         
         # Otomatik genişlik ayarı
         for column in ws.columns:
@@ -786,12 +723,12 @@ def create_advanced_excel_report(results: List[Dict], company: str, country: str
         return None
 
 class AdvancedTradeAnalyzer:
-    def __init__(self, config: Config):
+    def __init__(self, config):
         self.config = config
         self.search_engine = SearchEngineManager(config)
         self.ai_analyzer = AdvancedAIAnalyzer(config)
     
-    def ai_enhanced_search(self, company: str, country: str) -> List[Dict]:
+    def ai_enhanced_search(self, company, country):
         """AI destekli gelişmiş ticaret analizi"""
         logging.info(f"🤖 AI DESTEKLİ ANALİZ: {company} ↔ {country}")
         
@@ -801,9 +738,6 @@ class AdvancedTradeAnalyzer:
             f"{company} {country} trade",
             f"{company} {country} distributor",
             f"{company} {country} supplier",
-            f"{company} {country} partner",
-            f"{company} {country} HS code",
-            f"{company} {country} GTIP",
         ]
         
         all_results = []
