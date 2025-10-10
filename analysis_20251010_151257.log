@@ -1,0 +1,236 @@
+2025-10-10 15:13:13,599 - INFO - 🤖 AI DESTEKLİ ANALİZ: genel oto sanayi ve ticaret as ↔ russia
+2025-10-10 15:13:13,601 - INFO - 🔍 Çoklu arama motorlarında aranıyor: genel oto sanayi ve ticaret as export russia
+2025-10-10 15:13:14,086 - INFO - DuckDuckGo API: 0 sonuç bulundu
+2025-10-10 15:13:14,089 - WARNING - DuckDuckGo API çalışmadı, yedek veri üretiliyor...
+2025-10-10 15:13:14,089 - INFO - Yedek veri üretildi: 5 sonuç - GTIP: 8407
+2025-10-10 15:13:14,092 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8407']
+2025-10-10 15:13:14,092 - INFO - GTIP/HS kodları bulundu: ['8407']
+2025-10-10 15:13:14,092 - INFO - 🌐 Gerçek zamanlı AB yaptırım listesi alınıyor...
+2025-10-10 15:13:17,704 - INFO - AB sayfasından 48 yasaklı GTIP kodu çıkarıldı
+2025-10-10 15:13:17,704 - INFO - ✅ AB yaptırım listesi güncellendi: 48 yasaklı ürün
+2025-10-10 15:13:17,705 - WARNING - ⛔ Yaptırımlı kod bulundu: 8407
+2025-10-10 15:13:17,705 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:17,705 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8407']
+2025-10-10 15:13:17,705 - INFO - GTIP/HS kodları bulundu: ['8407']
+2025-10-10 15:13:17,705 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:17,705 - WARNING - ⛔ Yaptırımlı kod bulundu: 8407
+2025-10-10 15:13:17,705 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:17,705 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8407']
+2025-10-10 15:13:17,705 - INFO - GTIP/HS kodları bulundu: ['8407']
+2025-10-10 15:13:17,705 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:17,706 - WARNING - ⛔ Yaptırımlı kod bulundu: 8407
+2025-10-10 15:13:17,706 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:17,706 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8708', '8407']
+2025-10-10 15:13:17,706 - INFO - GTIP/HS kodları bulundu: ['8708', '8407']
+2025-10-10 15:13:17,706 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:17,706 - WARNING - ⛔ Yaptırımlı kod bulundu: 8407
+2025-10-10 15:13:17,706 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:17,706 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8407']
+2025-10-10 15:13:17,706 - INFO - GTIP/HS kodları bulundu: ['8407']
+2025-10-10 15:13:17,706 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:17,706 - WARNING - ⛔ Yaptırımlı kod bulundu: 8407
+2025-10-10 15:13:17,706 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:22,711 - INFO - 🔍 Çoklu arama motorlarında aranıyor: genel oto sanayi ve ticaret as russia business
+2025-10-10 15:13:23,019 - INFO - DuckDuckGo API: 0 sonuç bulundu
+2025-10-10 15:13:23,022 - WARNING - DuckDuckGo API çalışmadı, yedek veri üretiliyor...
+2025-10-10 15:13:23,022 - INFO - Yedek veri üretildi: 5 sonuç - GTIP: 8471
+2025-10-10 15:13:23,022 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8471']
+2025-10-10 15:13:23,022 - INFO - GTIP/HS kodları bulundu: ['8471']
+2025-10-10 15:13:23,022 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:23,023 - WARNING - ⛔ Yaptırımlı kod bulundu: 8471
+2025-10-10 15:13:23,023 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:23,023 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8471']
+2025-10-10 15:13:23,023 - INFO - GTIP/HS kodları bulundu: ['8471']
+2025-10-10 15:13:23,023 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:23,023 - WARNING - ⛔ Yaptırımlı kod bulundu: 8471
+2025-10-10 15:13:23,023 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:23,023 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8471']
+2025-10-10 15:13:23,024 - INFO - GTIP/HS kodları bulundu: ['8471']
+2025-10-10 15:13:23,024 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:23,024 - WARNING - ⛔ Yaptırımlı kod bulundu: 8471
+2025-10-10 15:13:23,024 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:23,024 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8708', '8471']
+2025-10-10 15:13:23,024 - INFO - GTIP/HS kodları bulundu: ['8708', '8471']
+2025-10-10 15:13:23,024 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:23,024 - WARNING - ⛔ Yaptırımlı kod bulundu: 8471
+2025-10-10 15:13:23,024 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:23,024 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8471']
+2025-10-10 15:13:23,025 - INFO - GTIP/HS kodları bulundu: ['8471']
+2025-10-10 15:13:23,025 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:23,025 - WARNING - ⛔ Yaptırımlı kod bulundu: 8471
+2025-10-10 15:13:23,025 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:28,030 - INFO - 🔍 Çoklu arama motorlarında aranıyor: genel oto sanayi ve ticaret as russia trade
+2025-10-10 15:13:28,421 - INFO - DuckDuckGo API: 0 sonuç bulundu
+2025-10-10 15:13:28,424 - WARNING - DuckDuckGo API çalışmadı, yedek veri üretiliyor...
+2025-10-10 15:13:28,425 - INFO - Yedek veri üretildi: 5 sonuç - GTIP: 8802
+2025-10-10 15:13:28,425 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8802']
+2025-10-10 15:13:28,425 - INFO - GTIP/HS kodları bulundu: ['8802']
+2025-10-10 15:13:28,425 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:28,426 - WARNING - ⛔ Yaptırımlı kod bulundu: 8802
+2025-10-10 15:13:28,426 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:28,426 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8802']
+2025-10-10 15:13:28,426 - INFO - GTIP/HS kodları bulundu: ['8802']
+2025-10-10 15:13:28,426 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:28,427 - WARNING - ⛔ Yaptırımlı kod bulundu: 8802
+2025-10-10 15:13:28,427 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:28,427 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8802']
+2025-10-10 15:13:28,427 - INFO - GTIP/HS kodları bulundu: ['8802']
+2025-10-10 15:13:28,427 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:28,427 - WARNING - ⛔ Yaptırımlı kod bulundu: 8802
+2025-10-10 15:13:28,427 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:28,428 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8802', '8708']
+2025-10-10 15:13:28,428 - INFO - GTIP/HS kodları bulundu: ['8802', '8708']
+2025-10-10 15:13:28,428 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:28,428 - WARNING - ⛔ Yaptırımlı kod bulundu: 8802
+2025-10-10 15:13:28,428 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:28,429 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8802']
+2025-10-10 15:13:28,429 - INFO - GTIP/HS kodları bulundu: ['8802']
+2025-10-10 15:13:28,429 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:28,429 - WARNING - ⛔ Yaptırımlı kod bulundu: 8802
+2025-10-10 15:13:28,429 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:33,434 - INFO - 🔍 Çoklu arama motorlarında aranıyor: genel oto sanayi ve ticaret as russia distributor
+2025-10-10 15:13:33,890 - INFO - DuckDuckGo API: 0 sonuç bulundu
+2025-10-10 15:13:33,894 - WARNING - DuckDuckGo API çalışmadı, yedek veri üretiliyor...
+2025-10-10 15:13:33,894 - INFO - Yedek veri üretildi: 5 sonuç - GTIP: 8802
+2025-10-10 15:13:33,894 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8802']
+2025-10-10 15:13:33,894 - INFO - GTIP/HS kodları bulundu: ['8802']
+2025-10-10 15:13:33,895 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:33,895 - WARNING - ⛔ Yaptırımlı kod bulundu: 8802
+2025-10-10 15:13:33,895 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:33,895 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8802']
+2025-10-10 15:13:33,896 - INFO - GTIP/HS kodları bulundu: ['8802']
+2025-10-10 15:13:33,896 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:33,896 - WARNING - ⛔ Yaptırımlı kod bulundu: 8802
+2025-10-10 15:13:33,896 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:33,896 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8802']
+2025-10-10 15:13:33,896 - INFO - GTIP/HS kodları bulundu: ['8802']
+2025-10-10 15:13:33,896 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:33,897 - WARNING - ⛔ Yaptırımlı kod bulundu: 8802
+2025-10-10 15:13:33,897 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:33,897 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8802', '8708']
+2025-10-10 15:13:33,897 - INFO - GTIP/HS kodları bulundu: ['8802', '8708']
+2025-10-10 15:13:33,897 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:33,897 - WARNING - ⛔ Yaptırımlı kod bulundu: 8802
+2025-10-10 15:13:33,897 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:33,898 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8802']
+2025-10-10 15:13:33,898 - INFO - GTIP/HS kodları bulundu: ['8802']
+2025-10-10 15:13:33,898 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:33,898 - WARNING - ⛔ Yaptırımlı kod bulundu: 8802
+2025-10-10 15:13:33,898 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:38,902 - INFO - 🔍 Çoklu arama motorlarında aranıyor: genel oto sanayi ve ticaret as russia supplier
+2025-10-10 15:13:39,249 - INFO - DuckDuckGo API: 0 sonuç bulundu
+2025-10-10 15:13:39,253 - WARNING - DuckDuckGo API çalışmadı, yedek veri üretiliyor...
+2025-10-10 15:13:39,253 - INFO - Yedek veri üretildi: 5 sonuç - GTIP: 8703
+2025-10-10 15:13:39,254 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8703']
+2025-10-10 15:13:39,254 - INFO - GTIP/HS kodları bulundu: ['8703']
+2025-10-10 15:13:39,254 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:39,254 - WARNING - ⛔ Yaptırımlı kod bulundu: 8703
+2025-10-10 15:13:39,254 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:39,255 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8703']
+2025-10-10 15:13:39,255 - INFO - GTIP/HS kodları bulundu: ['8703']
+2025-10-10 15:13:39,255 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:39,255 - WARNING - ⛔ Yaptırımlı kod bulundu: 8703
+2025-10-10 15:13:39,255 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:39,256 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8703']
+2025-10-10 15:13:39,256 - INFO - GTIP/HS kodları bulundu: ['8703']
+2025-10-10 15:13:39,256 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:39,256 - WARNING - ⛔ Yaptırımlı kod bulundu: 8703
+2025-10-10 15:13:39,256 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:39,257 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8708', '8703']
+2025-10-10 15:13:39,257 - INFO - GTIP/HS kodları bulundu: ['8708', '8703']
+2025-10-10 15:13:39,257 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:39,257 - WARNING - ⛔ Yaptırımlı kod bulundu: 8703
+2025-10-10 15:13:39,257 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:39,258 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8703']
+2025-10-10 15:13:39,258 - INFO - GTIP/HS kodları bulundu: ['8703']
+2025-10-10 15:13:39,258 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:39,258 - WARNING - ⛔ Yaptırımlı kod bulundu: 8703
+2025-10-10 15:13:39,258 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:44,259 - INFO - 🔍 Çoklu arama motorlarında aranıyor: genel oto sanayi ve ticaret as russia partner
+2025-10-10 15:13:44,618 - INFO - DuckDuckGo API: 0 sonuç bulundu
+2025-10-10 15:13:44,622 - WARNING - DuckDuckGo API çalışmadı, yedek veri üretiliyor...
+2025-10-10 15:13:44,622 - INFO - Yedek veri üretildi: 5 sonuç - GTIP: 8802
+2025-10-10 15:13:44,622 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8802']
+2025-10-10 15:13:44,623 - INFO - GTIP/HS kodları bulundu: ['8802']
+2025-10-10 15:13:44,623 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:44,623 - WARNING - ⛔ Yaptırımlı kod bulundu: 8802
+2025-10-10 15:13:44,623 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:44,623 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8802']
+2025-10-10 15:13:44,623 - INFO - GTIP/HS kodları bulundu: ['8802']
+2025-10-10 15:13:44,624 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:44,624 - WARNING - ⛔ Yaptırımlı kod bulundu: 8802
+2025-10-10 15:13:44,624 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:44,624 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8802']
+2025-10-10 15:13:44,624 - INFO - GTIP/HS kodları bulundu: ['8802']
+2025-10-10 15:13:44,624 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:44,625 - WARNING - ⛔ Yaptırımlı kod bulundu: 8802
+2025-10-10 15:13:44,625 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:44,625 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8802', '8708']
+2025-10-10 15:13:44,625 - INFO - GTIP/HS kodları bulundu: ['8802', '8708']
+2025-10-10 15:13:44,625 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:44,625 - WARNING - ⛔ Yaptırımlı kod bulundu: 8802
+2025-10-10 15:13:44,625 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:44,626 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8802']
+2025-10-10 15:13:44,626 - INFO - GTIP/HS kodları bulundu: ['8802']
+2025-10-10 15:13:44,626 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:44,626 - WARNING - ⛔ Yaptırımlı kod bulundu: 8802
+2025-10-10 15:13:44,626 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:49,631 - INFO - 🔍 Çoklu arama motorlarında aranıyor: genel oto sanayi ve ticaret as russia HS code
+2025-10-10 15:13:49,976 - INFO - DuckDuckGo API: 0 sonuç bulundu
+2025-10-10 15:13:49,980 - WARNING - DuckDuckGo API çalışmadı, yedek veri üretiliyor...
+2025-10-10 15:13:49,980 - INFO - Yedek veri üretildi: 5 sonuç - GTIP: 8703
+2025-10-10 15:13:49,981 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8703']
+2025-10-10 15:13:49,981 - INFO - GTIP/HS kodları bulundu: ['8703']
+2025-10-10 15:13:49,981 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:49,981 - WARNING - ⛔ Yaptırımlı kod bulundu: 8703
+2025-10-10 15:13:49,981 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:49,982 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8703']
+2025-10-10 15:13:49,982 - INFO - GTIP/HS kodları bulundu: ['8703']
+2025-10-10 15:13:49,982 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:49,982 - WARNING - ⛔ Yaptırımlı kod bulundu: 8703
+2025-10-10 15:13:49,982 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:49,983 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8703']
+2025-10-10 15:13:49,983 - INFO - GTIP/HS kodları bulundu: ['8703']
+2025-10-10 15:13:49,983 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:49,983 - WARNING - ⛔ Yaptırımlı kod bulundu: 8703
+2025-10-10 15:13:49,983 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:49,983 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8708', '8703']
+2025-10-10 15:13:49,984 - INFO - GTIP/HS kodları bulundu: ['8708', '8703']
+2025-10-10 15:13:49,984 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:49,984 - WARNING - ⛔ Yaptırımlı kod bulundu: 8703
+2025-10-10 15:13:49,984 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:49,984 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8703']
+2025-10-10 15:13:49,984 - INFO - GTIP/HS kodları bulundu: ['8703']
+2025-10-10 15:13:49,984 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:49,984 - WARNING - ⛔ Yaptırımlı kod bulundu: 8703
+2025-10-10 15:13:49,985 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:54,990 - INFO - 🔍 Çoklu arama motorlarında aranıyor: genel oto sanayi ve ticaret as russia GTIP
+2025-10-10 15:13:55,346 - INFO - DuckDuckGo API: 0 sonuç bulundu
+2025-10-10 15:13:55,351 - WARNING - DuckDuckGo API çalışmadı, yedek veri üretiliyor...
+2025-10-10 15:13:55,351 - INFO - Yedek veri üretildi: 5 sonuç - GTIP: 8542
+2025-10-10 15:13:55,351 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8542']
+2025-10-10 15:13:55,351 - INFO - GTIP/HS kodları bulundu: ['8542']
+2025-10-10 15:13:55,351 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:55,352 - WARNING - ⛔ Yaptırımlı kod bulundu: 8542
+2025-10-10 15:13:55,352 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:55,352 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8542']
+2025-10-10 15:13:55,352 - INFO - GTIP/HS kodları bulundu: ['8542']
+2025-10-10 15:13:55,352 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:55,352 - WARNING - ⛔ Yaptırımlı kod bulundu: 8542
+2025-10-10 15:13:55,352 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:55,353 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8542']
+2025-10-10 15:13:55,353 - INFO - GTIP/HS kodları bulundu: ['8542']
+2025-10-10 15:13:55,353 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:55,353 - WARNING - ⛔ Yaptırımlı kod bulundu: 8542
+2025-10-10 15:13:55,353 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:55,353 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8708', '8542']
+2025-10-10 15:13:55,353 - INFO - GTIP/HS kodları bulundu: ['8708', '8542']
+2025-10-10 15:13:55,353 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:55,353 - WARNING - ⛔ Yaptırımlı kod bulundu: 8542
+2025-10-10 15:13:55,353 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:55,353 - INFO - Metinden çıkarılan GTIP/HS kodları: ['8542']
+2025-10-10 15:13:55,353 - INFO - GTIP/HS kodları bulundu: ['8542']
+2025-10-10 15:13:55,353 - INFO - Önbellekten AB yaptırım listesi kullanılıyor
+2025-10-10 15:13:55,353 - WARNING - ⛔ Yaptırımlı kod bulundu: 8542
+2025-10-10 15:13:55,353 - INFO - ✅ Gerçek zamanlı AB yaptırım kontrolü tamamlandı: 1 yasaklı kod
+2025-10-10 15:13:55,385 - INFO - Excel raporu oluşturuldu: genel_oto_sanayi_ve_ticaret_as_russia_gercek_analiz.xlsx
