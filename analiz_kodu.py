@@ -5,8 +5,6 @@ import random
 import re
 from openpyxl import Workbook
 from openpyxl.styles import Font
-import io
-import json
 import sys
 import logging
 import os
@@ -39,20 +37,6 @@ class Config:
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0",
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/121.0",
         ]
-
-class ErrorHandler:
-    @staticmethod
-    def handle_request_error(func):
-        def wrapper(*args, **kwargs):
-            try:
-                return func(*args, **kwargs)
-            except requests.exceptions.RequestException as e:
-                logging.error(f"Request error in {func.__name__}: {e}")
-                return None
-            except Exception as e:
-                logging.error(f"Unexpected error in {func.__name__}: {e}")
-                return None
-        return wrapper
 
 class EUSanctionsAPI:
     """AB Yaptırım Listesi API'si - Gerçek Zamanlı Kontrol"""
@@ -292,7 +276,6 @@ class SearchEngineManager:
     def __init__(self, config):
         self.config = config
     
-    @ErrorHandler.handle_request_error
     def search_with_alternative_engines(self, query, max_results=None):
         """Alternatif arama motorlarıyla arama yap"""
         if max_results is None:

@@ -23,27 +23,6 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-@dataclass
-class Config:
-    MAX_RESULTS: int = 5
-    REQUEST_TIMEOUT: int = 20
-    RETRY_ATTEMPTS: int = 3
-    DELAY_BETWEEN_REQUESTS: float = 3.0
-    DELAY_BETWEEN_SEARCHES: float = 5.0
-    EU_SANCTIONS_URL: str = "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A02014R0833-20250720"
-    
-    USER_AGENTS: List[str] = None
-    
-    def __post_init__(self):
-        self.USER_AGENTS = [
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/121.0",
-        ]
-
-# Basit dataclass implementasyonu (Python 3.9 uyumlu)
 class Config:
     def __init__(self):
         self.MAX_RESULTS = 5
@@ -63,7 +42,6 @@ class Config:
 class ErrorHandler:
     @staticmethod
     def handle_request_error(func):
-        @wraps(func)
         def wrapper(*args, **kwargs):
             try:
                 return func(*args, **kwargs)
@@ -537,7 +515,6 @@ class SearchEngineManager:
     def __init__(self, config):
         self.config = config
     
-    @ErrorHandler.handle_request_error
     def search_with_alternative_engines(self, query, max_results=None):
         """Alternatif arama motorlarıyla arama yap"""
         if max_results is None:
