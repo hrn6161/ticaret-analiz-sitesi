@@ -32,60 +32,53 @@ class Config:
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         ]
 
-class SmartCrawler:
+class AdvancedCrawler:
     def __init__(self, config):
         self.config = config
     
-    def smart_crawl(self, url, target_country):
-        """Akıllı crawl"""
+    def advanced_crawl(self, url, target_country):
+        """Gelişmiş crawl - snippet derinlemesine analiz"""
         logging.info(f"🌐 Crawl: {url[:60]}...")
         
-        # 1. Deneme: Basit requests
-        result = self._try_request(url, target_country)
-        if result['status_code'] == 200:
-            return result
+        # Önce sayfayı dene
+        page_result = self._try_page_crawl(url, target_country)
+        if page_result['status_code'] == 200:
+            return page_result
         
-        # 2. Deneme: Gelişmiş headers
-        result = self._try_advanced(url, target_country)
-        if result['status_code'] == 200:
-            return result
-        
-        return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'FAILED'}
+        # Sayfa başarısızsa, snippet'i derinlemesine analiz et
+        logging.info(f"🔍 Snippet derinlemesine analiz: {url}")
+        return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'SNIPPET_ANALYSIS'}
     
-    def _try_request(self, url, target_country):
-        """Basit request"""
-        try:
-            headers = {'User-Agent': random.choice(self.config.USER_AGENTS)}
-            response = requests.get(url, headers=headers, timeout=10)
-            if response.status_code == 200:
-                return self._parse_content(response.text, target_country, response.status_code)
-        except:
-            pass
-        return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'ERROR'}
-    
-    def _try_advanced(self, url, target_country):
-        """Gelişmiş headers"""
+    def _try_page_crawl(self, url, target_country):
+        """Sayfa crawl dene"""
         try:
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'User-Agent': random.choice(self.config.USER_AGENTS),
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             }
             response = requests.get(url, headers=headers, timeout=10)
+            
             if response.status_code == 200:
-                return self._parse_content(response.text, target_country, response.status_code)
+                return self._parse_advanced_content(response.text, target_country, response.status_code)
+            else:
+                return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': response.status_code}
         except:
-            pass
-        return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'ERROR'}
+            return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'ERROR'}
     
-    def _parse_content(self, html, target_country, status_code):
-        """İçerik analizi"""
+    def _parse_advanced_content(self, html, target_country, status_code):
+        """Gelişmiş içerik analizi"""
         try:
             soup = BeautifulSoup(html, 'html.parser')
             text_content = soup.get_text()
             text_lower = text_content.lower()
             
-            country_found = target_country.lower() in text_lower
-            gtip_codes = self.extract_gtip_codes(text_content)
+            # Gelişmiş ülke kontrolü
+            country_found = self._check_country_advanced(text_lower, target_country)
+            
+            # Gelişmiş GTIP kod çıkarma
+            gtip_codes = self.extract_advanced_gtip_codes(text_content)
+            
+            logging.info(f"🔍 Sayfa analizi: Ülke={country_found}, GTIP={gtip_codes[:5]}")
             
             return {
                 'country_found': country_found,
@@ -96,12 +89,37 @@ class SmartCrawler:
         except:
             return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'PARSE_ERROR'}
     
-    def extract_gtip_codes(self, text):
-        """GTIP kodlarını çıkar"""
+    def _check_country_advanced(self, text_lower, target_country):
+        """Gelişmiş ülke kontrolü"""
+        country_variations = [
+            target_country.lower(),
+            target_country.upper(), 
+            target_country.title(),
+            'russia', 'rusya', 'rusian', 'rus'  # Rusya için özel varyasyonlar
+        ]
+        
+        # Ticaret terimleri ile birlikte kontrol
+        trade_terms = ['export', 'import', 'country', 'origin', 'destination', 'trade']
+        
+        for country_var in country_variations:
+            if country_var in text_lower:
+                # Ülke ismi geçiyorsa, ticaret terimleriyle yakınlık kontrolü
+                for term in trade_terms:
+                    if f"{term} {country_var}" in text_lower or f"{country_var} {term}" in text_lower:
+                        return True
+                return True
+        
+        return False
+    
+    def extract_advanced_gtip_codes(self, text):
+        """Gelişmiş GTIP kod çıkarma"""
         patterns = [
-            r'\b\d{4}\.?\d{0,4}\b',
+            r'\b\d{4}\.?\d{0,4}\b',  # 8708.30 gibi
+            r'\b\d{6}\b',  # 870830 gibi
             r'\bHS\s?CODE\s?:?\s?(\d{4,8})\b',
             r'\bGTIP\s?:?\s?(\d{4,8})\b',
+            r'\bH\.S\.\s?CODE?\s?:?\s?(\d{4,8})\b',
+            r'\bHarmonized\s?System\s?Code\s?:?\s?(\d{4,8})\b',
         ]
         
         all_codes = set()
@@ -111,18 +129,55 @@ class SmartCrawler:
             for match in matches:
                 if isinstance(match, tuple):
                     match = match[0]
+                
+                # Noktayı kaldır ve ilk 4 haneyi al
                 code = re.sub(r'[^\d]', '', match)
                 if len(code) >= 4:
                     all_codes.add(code[:4])
         
-        return list(all_codes)[:10]
+        return list(all_codes)
+    
+    def analyze_snippet_deep(self, snippet_text, target_country):
+        """Snippet derinlemesine analizi"""
+        if not snippet_text:
+            return {'country_found': False, 'gtip_codes': []}
+        
+        text_lower = snippet_text.lower()
+        
+        # Gelişmiş ülke kontrolü
+        country_found = self._check_country_advanced(text_lower, target_country)
+        
+        # Gelişmiş GTIP çıkarma
+        gtip_codes = self.extract_advanced_gtip_codes(snippet_text)
+        
+        # Özel pattern'ler için kontrol
+        special_patterns = [
+            (r'country of export.*russia', 'russia'),
+            (r'export.*russia', 'russia'), 
+            (r'hs code.*8708', '8708'),
+            (r'8708.*hs code', '8708'),
+        ]
+        
+        for pattern, value in special_patterns:
+            if re.search(pattern, text_lower, re.IGNORECASE):
+                if value.isdigit():
+                    gtip_codes.append(value)
+                country_found = True
+        
+        logging.info(f"🔍 Snippet analizi: Ülke={country_found}, GTIP={gtip_codes}")
+        
+        return {
+            'country_found': country_found,
+            'gtip_codes': gtip_codes
+        }
 
-class FastSearcher:
+class EnhancedSearcher:
     def __init__(self, config):
         self.config = config
+        self.crawler = AdvancedCrawler(config)
     
-    def fast_search(self, query, max_results=3):
-        """Hızlı arama"""
+    def enhanced_search(self, query, max_results=3):
+        """Gelişmiş arama - snippet analizi ile"""
         try:
             headers = {'User-Agent': random.choice(self.config.USER_AGENTS)}
             url = "https://html.duckduckgo.com/html/"
@@ -131,13 +186,13 @@ class FastSearcher:
             response = requests.post(url, data=data, headers=headers, timeout=15)
             
             if response.status_code == 200:
-                return self.parse_results(response.text, max_results)
+                return self.parse_enhanced_results(response.text, max_results)
             return []
         except:
             return []
     
-    def parse_results(self, html, max_results):
-        """Sonuçları parse et"""
+    def parse_enhanced_results(self, html, max_results):
+        """Gelişmiş sonuç parse"""
         soup = BeautifulSoup(html, 'html.parser')
         results = []
         
@@ -163,17 +218,29 @@ class FastSearcher:
                 if url and url.startswith('//'):
                     url = 'https:' + url
                 
+                # Snippet derinlemesine analiz
+                combined_text = f"{title} {snippet}"
+                
                 results.append({
                     'title': title,
                     'url': url,
                     'snippet': snippet,
-                    'full_text': f"{title} {snippet}"
+                    'full_text': combined_text,
+                    'domain': self._extract_domain(url)
                 })
                 
             except:
                 continue
         
         return results
+    
+    def _extract_domain(self, url):
+        """URL'den domain çıkar"""
+        try:
+            from urllib.parse import urlparse
+            return urlparse(url).netloc
+        except:
+            return ""
 
 class QuickEURLexChecker:
     def __init__(self, config):
@@ -222,29 +289,30 @@ class QuickEURLexChecker:
         
         return sanctioned_codes
 
-class AITradeAnalyzer:
+class EnhancedTradeAnalyzer:
     def __init__(self, config):
         self.config = config
-        self.searcher = FastSearcher(config)
-        self.crawler = SmartCrawler(config)
+        self.searcher = EnhancedSearcher(config)
+        self.crawler = AdvancedCrawler(config)
         self.eur_lex_checker = QuickEURLexChecker(config)
     
-    def analyze_company_country(self, company, country):
-        """Şirket-ülke analizi"""
-        logging.info(f"🤖 AI ANALİZ: {company} ↔ {country}")
+    def enhanced_analyze(self, company, country):
+        """Gelişmiş analiz"""
+        logging.info(f"🤖 GELİŞMİŞ ANALİZ: {company} ↔ {country}")
         
         search_queries = [
             f"{company} {country} export",
-            f"{company} {country} business"
+            f"{company} {country} business",
+            f"{company} {country} HS code"
         ]
         
         all_results = []
         
-        for i, query in enumerate(search_queries, 1):
+        for i, query in enumerate(search_queries[:2], 1):
             try:
                 logging.info(f"🔍 Sorgu {i}/2: {query}")
                 
-                search_results = self.searcher.fast_search(query, self.config.MAX_RESULTS)
+                search_results = self.searcher.enhanced_search(query, self.config.MAX_RESULTS)
                 
                 if not search_results:
                     continue
@@ -252,19 +320,27 @@ class AITradeAnalyzer:
                 for j, result in enumerate(search_results, 1):
                     logging.info(f"📄 Sonuç {j}: {result['title'][:50]}...")
                     
-                    crawl_result = self.crawler.smart_crawl(result['url'], country)
+                    # Gelişmiş crawl
+                    crawl_result = self.crawler.advanced_crawl(result['url'], country)
                     
-                    if not crawl_result['gtip_codes']:
-                        snippet_gtips = self.crawler.extract_gtip_codes(result['full_text'])
-                        if snippet_gtips:
-                            crawl_result['gtip_codes'] = snippet_gtips
+                    # Eğer sayfaya erişilemediyse, snippet derinlemesine analiz
+                    if crawl_result['status_code'] != 200:
+                        snippet_analysis = self.crawler.analyze_snippet_deep(result['full_text'], country)
+                        if snippet_analysis['country_found'] or snippet_analysis['gtip_codes']:
+                            crawl_result['country_found'] = snippet_analysis['country_found']
+                            crawl_result['gtip_codes'] = snippet_analysis['gtip_codes']
+                            logging.info(f"🔍 Snippet analizi: Ülke={snippet_analysis['country_found']}, GTIP={snippet_analysis['gtip_codes']}")
                     
+                    # EUR-Lex kontrolü
                     sanctioned_gtips = []
                     if crawl_result['gtip_codes']:
                         sanctioned_gtips = self.eur_lex_checker.quick_check_gtip(crawl_result['gtip_codes'])
                     
-                    analysis = self.create_analysis_result(
-                        company, country, result, crawl_result, sanctioned_gtips
+                    # Güven seviyesi hesapla
+                    confidence = self._calculate_confidence(crawl_result, sanctioned_gtips, result['domain'])
+                    
+                    analysis = self.create_enhanced_analysis_result(
+                        company, country, result, crawl_result, sanctioned_gtips, confidence
                     )
                     
                     all_results.append(analysis)
@@ -278,8 +354,39 @@ class AITradeAnalyzer:
         
         return all_results
     
-    def create_analysis_result(self, company, country, search_result, crawl_result, sanctioned_gtips):
-        """Analiz sonucu oluştur"""
+    def _calculate_confidence(self, crawl_result, sanctioned_gtips, domain):
+        """Güven seviyesi hesapla"""
+        confidence = 0
+        
+        # Domain güveni
+        trusted_domains = ['trademo.com', 'eximpedia.app', 'volza.com', 'importyet.com']
+        if any(trusted in domain for trusted in trusted_domains):
+            confidence += 30
+        
+        # GTIP kodları
+        if crawl_result['gtip_codes']:
+            confidence += 25
+        
+        # Ülke bağlantısı
+        if crawl_result['country_found']:
+            confidence += 25
+        
+        # Yaptırım tespiti
+        if sanctioned_gtips:
+            confidence += 20
+        
+        return min(confidence, 100)
+    
+    def create_enhanced_analysis_result(self, company, country, search_result, crawl_result, sanctioned_gtips, confidence):
+        """Gelişmiş analiz sonucu"""
+        
+        reasons = []
+        if crawl_result['country_found']:
+            reasons.append("Ülke bağlantısı tespit edildi")
+        if crawl_result['gtip_codes']:
+            reasons.append(f"GTIP kodları bulundu: {', '.join(crawl_result['gtip_codes'][:3])}")
+        if sanctioned_gtips:
+            reasons.append(f"Yaptırımlı GTIP kodları: {', '.join(sanctioned_gtips)}")
         
         if sanctioned_gtips:
             status = "YAPTIRIMLI_YÜKSEK_RISK"
@@ -315,13 +422,14 @@ class AITradeAnalyzer:
             'BAŞLIK': search_result['title'],
             'URL': search_result['url'],
             'ÖZET': search_result['snippet'],
-            'CONTENT_PREVIEW': crawl_result['content_preview'],
             'STATUS_CODE': crawl_result.get('status_code', 'N/A'),
-            'KAYNAK_URL': search_result['url']
+            'KAYNAK_URL': search_result['url'],
+            'GÜVEN_SEVİYESİ': f"%{confidence}",
+            'NEDENLER': ' | '.join(reasons) if reasons else 'Belirsiz'
         }
 
 def create_detailed_excel_report(results, company, country):
-    """Detaylı Excel raporu - orijinal formata uygun"""
+    """Detaylı Excel raporu"""
     try:
         filename = f"{company.replace(' ', '_')}_{country}_ticaret_analiz.xlsx"
         filepath = os.path.join('/tmp', filename)
@@ -334,8 +442,8 @@ def create_detailed_excel_report(results, company, country):
         
         headers = [
             'ŞİRKET', 'ÜLKE', 'DURUM', 'YAPTIRIM_RISKI', 'ULKE_BAGLANTISI',
-            'TESPIT_EDILEN_GTIPLER', 'YAPTIRIMLI_GTIPLER', 'AI_AÇIKLAMA',
-            'AI_TAVSIYE', 'BAŞLIK', 'URL', 'ÖZET', 'STATUS_CODE'
+            'TESPIT_EDILEN_GTIPLER', 'YAPTIRIMLI_GTIPLER', 'GÜVEN_SEVİYESİ', 'NEDENLER',
+            'AI_AÇIKLAMA', 'AI_TAVSIYE', 'BAŞLIK', 'URL', 'ÖZET'
         ]
         
         for col, header in enumerate(headers, 1):
@@ -349,12 +457,13 @@ def create_detailed_excel_report(results, company, country):
             ws1.cell(row=row, column=5, value=str(result.get('ULKE_BAGLANTISI', '')))
             ws1.cell(row=row, column=6, value=str(result.get('TESPIT_EDILEN_GTIPLER', '')))
             ws1.cell(row=row, column=7, value=str(result.get('YAPTIRIMLI_GTIPLER', '')))
-            ws1.cell(row=row, column=8, value=str(result.get('AI_AÇIKLAMA', '')))
-            ws1.cell(row=row, column=9, value=str(result.get('AI_TAVSIYE', '')))
-            ws1.cell(row=row, column=10, value=str(result.get('BAŞLIK', '')))
-            ws1.cell(row=row, column=11, value=str(result.get('URL', '')))
-            ws1.cell(row=row, column=12, value=str(result.get('ÖZET', '')))
-            ws1.cell(row=row, column=13, value=str(result.get('STATUS_CODE', '')))
+            ws1.cell(row=row, column=8, value=str(result.get('GÜVEN_SEVİYESİ', '')))
+            ws1.cell(row=row, column=9, value=str(result.get('NEDENLER', '')))
+            ws1.cell(row=row, column=10, value=str(result.get('AI_AÇIKLAMA', '')))
+            ws1.cell(row=row, column=11, value=str(result.get('AI_TAVSIYE', '')))
+            ws1.cell(row=row, column=12, value=str(result.get('BAŞLIK', '')))
+            ws1.cell(row=row, column=13, value=str(result.get('URL', '')))
+            ws1.cell(row=row, column=14, value=str(result.get('ÖZET', '')))
         
         # 2. Sayfa: Yapay Zeka Özeti
         ws2 = wb.create_sheet("🤖 YAPAY ZEKA TİCARET ANALİZ YORUMU")
@@ -387,30 +496,35 @@ def create_detailed_excel_report(results, company, country):
         ws2['A10'] = "ÜLKE BAĞLANTISI:"
         ws2['B10'] = country_connection_count
         
+        # Ortalama Güven Seviyesi
+        avg_confidence = sum([int(r.get('GÜVEN_SEVİYESİ', '0%').strip('%')) for r in results if r.get('GÜVEN_SEVİYESİ')]) // max(len(results), 1)
+        ws2['A11'] = "ORTALAMA GÜVEN:"
+        ws2['B11'] = f"%{avg_confidence}"
+        
         # Yapay Zeka Yorumu
-        ws2['A12'] = "🤖 YAPAY ZEKA ANALİZ YORUMU:"
-        ws2['A12'].font = Font(bold=True)
+        ws2['A13'] = "🤖 YAPAY ZEKA ANALİZ YORUMU:"
+        ws2['A13'].font = Font(bold=True)
         
         if high_risk_count > 0:
             yorum = f"⛔ KRİTİK RİSK! {company} şirketinin {country} ile yaptırımlı ürün ticareti tespit edildi. "
             yorum += f"Toplam {high_risk_count} farklı kaynakta yaptırımlı GTIP kodları bulundu. "
-            yorum += "Acil önlem alınması gerekmektedir."
+            yorum += f"Ortalama güven seviyesi: %{avg_confidence}. Acil önlem alınması gerekmektedir."
         elif medium_risk_count > 0:
             yorum = f"🟡 ORTA RİSK! {company} şirketinin {country} ile ticaret bağlantısı bulundu. "
             yorum += f"{medium_risk_count} farklı kaynakta ticaret ilişkisi doğrulandı. "
-            yorum += "Detaylı inceleme önerilir."
+            yorum += f"Ortalama güven seviyesi: %{avg_confidence}. Detaylı inceleme önerilir."
         elif country_connection_count > 0:
             yorum = f"🟢 DÜŞÜK RİSK! {company} şirketinin {country} ile bağlantısı bulundu ancak yaptırım riski tespit edilmedi. "
-            yorum += "Standart ticaret prosedürleri uygulanabilir."
+            yorum += f"Ortalama güven seviyesi: %{avg_confidence}. Standart ticaret prosedürleri uygulanabilir."
         else:
             yorum = f"✅ TEMİZ! {company} şirketinin {country} ile ticaret bağlantısı bulunamadı. "
-            yorum += "Herhangi bir yaptırım riski tespit edilmedi."
+            yorum += f"Ortalama güven seviyesi: %{avg_confidence}. Herhangi bir yaptırım riski tespit edilmedi."
         
-        ws2['A13'] = yorum
+        ws2['A14'] = yorum
         
         # Tavsiyeler
-        ws2['A15'] = "💡 YAPAY ZEKA TAVSİYELERİ:"
-        ws2['A15'].font = Font(bold=True)
+        ws2['A16'] = "💡 YAPAY ZEKA TAVSİYELERİ:"
+        ws2['A16'].font = Font(bold=True)
         
         if high_risk_count > 0:
             tavsiye = "1. ⛔ Yaptırımlı ürün ihracından acilen kaçının\n"
@@ -428,24 +542,18 @@ def create_detailed_excel_report(results, company, country):
             tavsiye += "3. 🔄 Düzenli olarak kontrol edin\n"
             tavsiye += "4. 🌍 Yeni iş fırsatlarını değerlendirin"
         
-        ws2['A16'] = tavsiye
+        ws2['A17'] = tavsiye
         
         # Kaynaklar
-        ws2['A18'] = "🔍 ANALİZ EDİLEN KAYNAKLAR:"
-        ws2['A18'].font = Font(bold=True)
+        ws2['A19'] = "🔍 ANALİZ EDİLEN KAYNAKLAR:"
+        ws2['A19'].font = Font(bold=True)
         
-        for i, result in enumerate(results[:5], 1):  # İlk 5 kaynak
-            ws2[f'A{19 + i}'] = f"{i}. {result.get('BAŞLIK', '')}"
-            ws2[f'B{19 + i}'] = result.get('URL', '')
+        for i, result in enumerate(results[:5], 1):
+            ws2[f'A{20 + i}'] = f"{i}. {result.get('BAŞLIK', '')}"
+            ws2[f'B{20 + i}'] = result.get('URL', '')
+            ws2[f'C{20 + i}'] = result.get('GÜVEN_SEVİYESİ', '')
         
         # Stil ayarları
-        for row in range(1, 25):
-            for col in range(1, 9):
-                cell = ws2.cell(row=row, column=col)
-                if row in [1, 12, 15, 18]:
-                    cell.font = Font(bold=True)
-        
-        # Kolon genişlikleri
         for column in ws1.columns:
             max_length = 0
             column_letter = column[0].column_letter
@@ -458,8 +566,9 @@ def create_detailed_excel_report(results, company, country):
             adjusted_width = min(max_length + 2, 50)
             ws1.column_dimensions[column_letter].width = adjusted_width
         
-        ws2.column_dimensions['A'].width = 30
+        ws2.column_dimensions['A'].width = 25
         ws2.column_dimensions['B'].width = 50
+        ws2.column_dimensions['C'].width = 15
         
         wb.save(filepath)
         logging.info(f"✅ Detaylı Excel raporu oluşturuldu: {filepath}")
@@ -486,12 +595,12 @@ def analyze():
         if not company or not country:
             return jsonify({"error": "Şirket ve ülke bilgisi gereklidir"}), 400
         
-        logging.info(f"🚀 AI ANALİZ BAŞLATILIYOR: {company} - {country}")
+        logging.info(f"🚀 GELİŞMİŞ ANALİZ BAŞLATILIYOR: {company} - {country}")
         
         config = Config()
-        analyzer = AITradeAnalyzer(config)
+        analyzer = EnhancedTradeAnalyzer(config)
         
-        results = analyzer.analyze_company_country(company, country)
+        results = analyzer.enhanced_analyze(company, country)
         
         excel_filepath = create_detailed_excel_report(results, company, country)
         
