@@ -10,6 +10,7 @@ import sys
 import logging
 import os
 from datetime import datetime
+import threading
 
 app = Flask(__name__)
 
@@ -24,8 +25,8 @@ logging.basicConfig(
 class Config:
     def __init__(self):
         self.MAX_RESULTS = 3
-        self.REQUEST_TIMEOUT = 20  # Artırıldı
-        self.RETRY_ATTEMPTS = 3   # Artırıldı
+        self.REQUEST_TIMEOUT = 30  # Uzun timeout
+        self.RETRY_ATTEMPTS = 2
         self.MAX_GTIP_CHECK = 3
         self.USER_AGENTS = [
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -38,14 +39,15 @@ class AdvancedCrawler:
         self.config = config
     
     def advanced_crawl(self, url, target_country):
-        """Gelişmiş crawl - daha uzun bekleme"""
+        """Gelişmiş crawl - uzun bekleme"""
         logging.info(f"🌐 Crawl: {url[:60]}...")
         
         # Domain'e özel bekleme
         domain = self._extract_domain(url)
-        if 'trademo.com' in domain:
-            logging.info(f"⏳ Trademo.com için ekstra bekleme...")
-            time.sleep(random.uniform(2, 4))  # Trademo için daha uzun bekleme
+        if any(site in domain for site in ['trademo.com', 'volza.com', 'eximpedia.app']):
+            wait_time = random.uniform(3, 6)
+            logging.info(f"⏳ {domain} için {wait_time:.1f}s bekleme...")
+            time.sleep(wait_time)
         
         # Önce sayfayı dene
         page_result = self._try_page_crawl(url, target_country)
@@ -54,7 +56,7 @@ class AdvancedCrawler:
         
         # Sayfa başarısızsa, snippet'i derinlemesine analiz et
         logging.info(f"🔍 Snippet derinlemesine analiz: {url}")
-        snippet_analysis = self.analyze_snippet_deep("", target_country, url)  # Boş snippet, URL'den domain kontrolü
+        snippet_analysis = self.analyze_snippet_deep("", target_country, url)
         return {
             'country_found': snippet_analysis['country_found'], 
             'gtip_codes': snippet_analysis['gtip_codes'],
@@ -63,7 +65,7 @@ class AdvancedCrawler:
         }
     
     def _try_page_crawl(self, url, target_country):
-        """Sayfa crawl dene - daha uzun timeout"""
+        """Sayfa crawl dene - uzun timeout"""
         try:
             headers = {
                 'User-Agent': random.choice(self.config.USER_AGENTS),
@@ -71,24 +73,42 @@ class AdvancedCrawler:
                 'Accept-Language': 'en-US,en;q=0.5',
                 'Accept-Encoding': 'gzip, deflate, br',
                 'Connection': 'keep-alive',
+                'DNT': '1',
             }
             
-            # Trademo için özel headers
-            if 'trademo.com' in url:
+            # Özel domain'ler için headers
+            domain = self._extract_domain(url)
+            if 'trademo.com' in domain:
                 headers.update({
                     'Referer': 'https://www.trademo.com/',
                     'Sec-Fetch-Dest': 'document',
                     'Sec-Fetch-Mode': 'navigate',
                     'Sec-Fetch-Site': 'none',
                 })
+            elif 'volza.com' in domain:
+                headers.update({
+                    'Referer': 'https://www.volza.com/',
+                    'Sec-Fetch-Dest': 'document',
+                })
+            elif 'eximpedia.app' in domain:
+                headers.update({
+                    'Referer': 'https://www.eximpedia.app/',
+                    'Sec-Fetch-Dest': 'document',
+                })
             
-            response = requests.get(url, headers=headers, timeout=15)  # Uzun timeout
+            response = requests.get(url, headers=headers, timeout=20)  # Uzun timeout
             
             if response.status_code == 200:
                 return self._parse_advanced_content(response.text, target_country, response.status_code)
+            elif response.status_code == 403:
+                logging.warning(f"🔒 403 Forbidden: {url} - Snippet analizine geçiliyor")
+                return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 403}
             else:
                 logging.warning(f"❌ Sayfa hatası {response.status_code}: {url}")
                 return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': response.status_code}
+        except requests.exceptions.Timeout:
+            logging.warning(f"⏰ Timeout: {url} - Snippet analizine geçiliyor")
+            return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'TIMEOUT'}
         except Exception as e:
             logging.error(f"❌ Sayfa crawl hatası: {e}")
             return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'ERROR'}
@@ -172,12 +192,12 @@ class AdvancedCrawler:
     def analyze_snippet_deep(self, snippet_text, target_country, url=""):
         """Snippet derinlemesine analizi - URL'den domain kontrolü"""
         domain = self._extract_domain(url)
-        text_lower = (snippet_text + " " + domain).lower()  # Domain'i de analize ekle
+        combined_text = f"{snippet_text} {domain}".lower()
         
         logging.info(f"🔍 Snippet analizi: {snippet_text[:100]}...")
         
         # Gelişmiş ülke kontrolü
-        country_found = self._check_country_advanced(text_lower, target_country)
+        country_found = self._check_country_advanced(combined_text, target_country)
         
         # Gelişmiş GTIP çıkarma
         gtip_codes = self.extract_advanced_gtip_codes(snippet_text)
@@ -185,24 +205,23 @@ class AdvancedCrawler:
         # Domain'e özel pattern'ler
         if 'trademo.com' in domain:
             logging.info("🎯 Trademo.com özel analizi...")
-            # Trademo için özel pattern'ler
             special_patterns = [
                 (r'country of export.*russia', 'russia', 'country_found'),
                 (r'export.*russia', 'russia', 'country_found'), 
                 (r'hs code.*8708', '8708', 'gtip'),
                 (r'8708.*hs code', '8708', 'gtip'),
-                (r'870830', '8708', 'gtip'),  # 6 haneli HS code
-                (r'8708\.30', '8708', 'gtip'),  # Noktalı HS code
+                (r'870830', '8708', 'gtip'),
+                (r'8708\.30', '8708', 'gtip'),
             ]
             
             for pattern, value, pattern_type in special_patterns:
-                if re.search(pattern, text_lower, re.IGNORECASE):
+                if re.search(pattern, combined_text, re.IGNORECASE):
                     if pattern_type == 'gtip' and value not in gtip_codes:
                         gtip_codes.append(value)
-                        logging.info(f"🔍 Trademo özel pattern GTIP: {value} ({pattern})")
+                        logging.info(f"🔍 Trademo özel pattern GTIP: {value}")
                     elif pattern_type == 'country_found' and not country_found:
                         country_found = True
-                        logging.info(f"🔍 Trademo özel pattern ülke: {value} ({pattern})")
+                        logging.info(f"🔍 Trademo özel pattern ülke: {value}")
         
         logging.info(f"🔍 Snippet analizi sonucu: Ülke={country_found}, GTIP={gtip_codes}")
         
@@ -225,7 +244,7 @@ class EnhancedSearcher:
         self.crawler = AdvancedCrawler(config)
     
     def enhanced_search(self, query, max_results=3):
-        """Gelişmiş arama - daha uzun bekleme"""
+        """Gelişmiş arama - uzun bekleme"""
         try:
             logging.info(f"🔍 DuckDuckGo: {query}")
             
@@ -237,10 +256,12 @@ class EnhancedSearcher:
             url = "https://html.duckduckgo.com/html/"
             data = {'q': query, 'b': '', 'kl': 'us-en'}
             
-            # Arama öncesi rastgele bekleme
-            time.sleep(random.uniform(1, 3))
+            # Uzun bekleme
+            wait_time = random.uniform(3, 6)
+            logging.info(f"⏳ Arama öncesi {wait_time:.1f}s bekleme...")
+            time.sleep(wait_time)
             
-            response = requests.post(url, data=data, headers=headers, timeout=20)
+            response = requests.post(url, data=data, headers=headers, timeout=25)
             
             if response.status_code == 200:
                 results = self.parse_enhanced_results(response.text, max_results)
@@ -269,9 +290,8 @@ class EnhancedSearcher:
                 
                 if url and '//duckduckgo.com/l/' in url:
                     try:
-                        # Redirect için bekleme
-                        time.sleep(1)
-                        redirect_response = requests.get(url, timeout=8, allow_redirects=True)
+                        time.sleep(2)  # Redirect için uzun bekleme
+                        redirect_response = requests.get(url, timeout=10, allow_redirects=True)
                         url = redirect_response.url
                     except:
                         pass
@@ -282,14 +302,11 @@ class EnhancedSearcher:
                 if url and url.startswith('//'):
                     url = 'https:' + url
                 
-                # Snippet derinlemesine analiz
-                combined_text = f"{title} {snippet}"
-                
                 results.append({
                     'title': title,
                     'url': url,
                     'snippet': snippet,
-                    'full_text': combined_text,
+                    'full_text': f"{title} {snippet}",
                     'domain': self._extract_domain(url)
                 })
                 
@@ -316,7 +333,7 @@ class QuickEURLexChecker:
         self.sanction_cache = {}
     
     def quick_check_gtip(self, gtip_codes):
-        """Hızlı GTIP kontrolü"""
+        """Hızlı GTIP kontrolü - uzun bekleme"""
         if not gtip_codes:
             return []
             
@@ -333,8 +350,9 @@ class QuickEURLexChecker:
                 continue
                 
             try:
-                # EUR-Lex öncesi bekleme
-                time.sleep(random.uniform(1, 2))
+                wait_time = random.uniform(2, 4)
+                logging.info(f"⏳ EUR-Lex öncesi {wait_time:.1f}s bekleme...")
+                time.sleep(wait_time)
                 
                 url = "https://eur-lex.europa.eu/search.html"
                 params = {
@@ -347,7 +365,7 @@ class QuickEURLexChecker:
                     'User-Agent': random.choice(self.config.USER_AGENTS),
                 }
                 
-                response = requests.get(url, params=params, headers=headers, timeout=10)
+                response = requests.get(url, params=params, headers=headers, timeout=15)
                 
                 if response.status_code == 200:
                     soup = BeautifulSoup(response.text, 'html.parser')
@@ -380,25 +398,26 @@ class EnhancedTradeAnalyzer:
         self.eur_lex_checker = QuickEURLexChecker(config)
     
     def enhanced_analyze(self, company, country):
-        """Gelişmiş analiz - daha yavaş ve kararlı"""
-        logging.info(f"🤖 GELİŞMİŞ ANALİZ: {company} ↔ {country}")
+        """Gelişmiş analiz - çoklu sorgu ve uzun süreli"""
+        logging.info(f"🤖 GELİŞMİŞ ANALİZ BAŞLATILIYOR: {company} ↔ {country}")
         
         search_queries = [
             f"{company} {country} export",
             f"{company} {country} business",
-            f"{company} {country} HS code"
+            f"{company} {country} HS code",
+            f"{company} {country} trade"
         ]
         
         all_results = []
         
-        for i, query in enumerate(search_queries[:2], 1):
+        for i, query in enumerate(search_queries, 1):
             try:
-                logging.info(f"🔍 Sorgu {i}/2: {query}")
+                logging.info(f"🔍 Sorgu {i}/4: {query}")
                 
-                # Sorgular arası bekleme
+                # Sorgular arası uzun bekleme
                 if i > 1:
-                    wait_time = random.uniform(3, 6)
-                    logging.info(f"⏳ Sorgular arası bekleme: {wait_time:.1f}s")
+                    wait_time = random.uniform(5, 10)
+                    logging.info(f"⏳ Sorgular arası {wait_time:.1f}s bekleme...")
                     time.sleep(wait_time)
                 
                 search_results = self.searcher.enhanced_search(query, self.config.MAX_RESULTS)
@@ -410,22 +429,24 @@ class EnhancedTradeAnalyzer:
                 for j, result in enumerate(search_results, 1):
                     logging.info(f"📄 Sonuç {j} analiz ediliyor: {result['title'][:50]}...")
                     
-                    # Sonuçlar arası kısa bekleme
+                    # Sonuçlar arası uzun bekleme
                     if j > 1:
-                        time.sleep(random.uniform(1, 2))
+                        wait_time = random.uniform(3, 6)
+                        logging.info(f"⏳ Sonuçlar arası {wait_time:.1f}s bekleme...")
+                        time.sleep(wait_time)
                     
                     # Gelişmiş crawl
                     crawl_result = self.crawler.advanced_crawl(result['url'], country)
                     
                     # Eğer sayfaya erişilemediyse, snippet derinlemesine analiz
-                    if crawl_result['status_code'] != 200:
+                    if crawl_result['status_code'] not in [200, 403, 'TIMEOUT']:
                         snippet_analysis = self.crawler.analyze_snippet_deep(result['full_text'], country, result['url'])
                         if snippet_analysis['country_found'] or snippet_analysis['gtip_codes']:
                             crawl_result['country_found'] = snippet_analysis['country_found']
                             crawl_result['gtip_codes'] = snippet_analysis['gtip_codes']
                             logging.info(f"🔍 Snippet analizi sonucu: Ülke={snippet_analysis['country_found']}, GTIP={snippet_analysis['gtip_codes']}")
                     
-                    # EUR-Lex kontrolü
+                    # EUR-Lex kontrolü (sadece GTIP varsa)
                     sanctioned_gtips = []
                     if crawl_result['gtip_codes']:
                         logging.info(f"🔍 EUR-Lex kontrolü yapılıyor...")
@@ -486,7 +507,7 @@ class EnhancedTradeAnalyzer:
             reasons.append(f"GTIP kodları bulundu: {', '.join(crawl_result['gtip_codes'][:3])}")
         if sanctioned_gtips:
             reasons.append(f"Yaptırımlı GTIP kodları: {', '.join(sanctioned_gtips)}")
-        if 'trademo.com' in search_result['domain']:
+        if any(trusted in search_result['domain'] for trusted in ['trademo.com', 'volza.com', 'eximpedia.app']):
             reasons.append("Güvenilir ticaret verisi kaynağı")
         
         if sanctioned_gtips:
@@ -530,7 +551,7 @@ class EnhancedTradeAnalyzer:
         }
 
 def create_detailed_excel_report(results, company, country):
-    """Detaylı Excel raporu - XML hatası düzeltildi"""
+    """Detaylı Excel raporu"""
     try:
         filename = f"{company.replace(' ', '_')}_{country}_ticaret_analiz.xlsx"
         filepath = os.path.join('/tmp', filename)
@@ -568,7 +589,7 @@ def create_detailed_excel_report(results, company, country):
             ws1.cell(row=row, column=14, value=str(result.get('ÖZET', '')))
         
         # 2. Sayfa: Yapay Zeka Özeti
-        ws2 = wb.create_sheet("AI Analiz Özeti")  # Emoji kaldırıldı - XML hatası için
+        ws2 = wb.create_sheet("AI Analiz Özeti")
         
         # Başlık
         ws2.merge_cells('A1:H1')
@@ -648,14 +669,6 @@ def create_detailed_excel_report(results, company, country):
         
         ws2.cell(row=17, column=1, value=tavsiye)
         
-        # Kaynaklar
-        ws2.cell(row=19, column=1, value="ANALİZ EDİLEN KAYNAKLAR:").font = Font(bold=True)
-        
-        for i, result in enumerate(results[:5], 1):
-            ws2.cell(row=20 + i, column=1, value=f"{i}. {result.get('BAŞLIK', '')}")
-            ws2.cell(row=20 + i, column=2, value=result.get('URL', ''))
-            ws2.cell(row=20 + i, column=3, value=result.get('GÜVEN_SEVİYESİ', ''))
-        
         # Stil ayarları
         for column in ws1.columns:
             max_length = 0
@@ -671,7 +684,6 @@ def create_detailed_excel_report(results, company, country):
         
         ws2.column_dimensions['A'].width = 25
         ws2.column_dimensions['B'].width = 50
-        ws2.column_dimensions['C'].width = 15
         
         wb.save(filepath)
         logging.info(f"✅ Detaylı Excel raporu oluşturuldu: {filepath}")

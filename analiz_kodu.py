@@ -25,8 +25,8 @@ logging.basicConfig(
 class Config:
     def __init__(self):
         self.MAX_RESULTS = 3
-        self.REQUEST_TIMEOUT = 20  # Artırıldı
-        self.RETRY_ATTEMPTS = 3    # Artırıldı
+        self.REQUEST_TIMEOUT = 30  # Uzun timeout
+        self.RETRY_ATTEMPTS = 2
         self.MAX_GTIP_CHECK = 3
         self.USER_AGENTS = [
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -39,14 +39,15 @@ class AdvancedCrawler:
         self.config = config
     
     def advanced_crawl(self, url, target_country):
-        """Gelişmiş crawl - daha uzun bekleme"""
+        """Gelişmiş crawl - uzun bekleme"""
         print(f"   🌐 Crawl: {url[:60]}...")
         
         # Domain'e özel bekleme
         domain = self._extract_domain(url)
-        if 'trademo.com' in domain:
-            print(f"   ⏳ Trademo.com için ekstra bekleme...")
-            time.sleep(random.uniform(3, 5))  # Trademo için daha uzun bekleme
+        if any(site in domain for site in ['trademo.com', 'volza.com', 'eximpedia.app']):
+            wait_time = random.uniform(3, 6)
+            print(f"   ⏳ {domain} için {wait_time:.1f}s bekleme...")
+            time.sleep(wait_time)
         
         # Önce sayfayı dene
         page_result = self._try_page_crawl(url, target_country)
@@ -58,7 +59,7 @@ class AdvancedCrawler:
         return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'SNIPPET_ANALYSIS'}
     
     def _try_page_crawl(self, url, target_country):
-        """Sayfa crawl dene - daha uzun timeout"""
+        """Sayfa crawl dene - uzun timeout"""
         try:
             headers = {
                 'User-Agent': random.choice(self.config.USER_AGENTS),
@@ -66,10 +67,12 @@ class AdvancedCrawler:
                 'Accept-Language': 'en-US,en;q=0.5',
                 'Accept-Encoding': 'gzip, deflate, br',
                 'Connection': 'keep-alive',
+                'DNT': '1',
             }
             
-            # Trademo için özel headers
-            if 'trademo.com' in url:
+            # Özel domain'ler için headers
+            domain = self._extract_domain(url)
+            if 'trademo.com' in domain:
                 headers.update({
                     'Referer': 'https://www.trademo.com/',
                     'Sec-Fetch-Dest': 'document',
@@ -77,14 +80,32 @@ class AdvancedCrawler:
                     'Sec-Fetch-Site': 'none',
                 })
                 print(f"   🎯 Trademo.com için özel headers kullanılıyor...")
+            elif 'volza.com' in domain:
+                headers.update({
+                    'Referer': 'https://www.volza.com/',
+                    'Sec-Fetch-Dest': 'document',
+                })
+                print(f"   🎯 Volza.com için özel headers kullanılıyor...")
+            elif 'eximpedia.app' in domain:
+                headers.update({
+                    'Referer': 'https://www.eximpedia.app/',
+                    'Sec-Fetch-Dest': 'document',
+                })
+                print(f"   🎯 Eximpedia.app için özel headers kullanılıyor...")
             
-            response = requests.get(url, headers=headers, timeout=15)  # Uzun timeout
+            response = requests.get(url, headers=headers, timeout=20)  # Uzun timeout
             
             if response.status_code == 200:
                 return self._parse_advanced_content(response.text, target_country, response.status_code)
+            elif response.status_code == 403:
+                print(f"   🔒 403 Forbidden: {url} - Snippet analizine geçiliyor")
+                return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 403}
             else:
                 print(f"   ❌ Sayfa hatası {response.status_code}: {url}")
                 return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': response.status_code}
+        except requests.exceptions.Timeout:
+            print(f"   ⏰ Timeout: {url} - Snippet analizine geçiliyor")
+            return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'TIMEOUT'}
         except Exception as e:
             print(f"   ❌ Sayfa crawl hatası: {e}")
             return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'ERROR'}
@@ -219,7 +240,7 @@ class EnhancedSearcher:
         self.crawler = AdvancedCrawler(config)
     
     def enhanced_search(self, query, max_results=3):
-        """Gelişmiş arama - daha uzun bekleme"""
+        """Gelişmiş arama - uzun bekleme"""
         try:
             print(f"   🔍 DuckDuckGo: {query}")
             
@@ -231,12 +252,12 @@ class EnhancedSearcher:
             url = "https://html.duckduckgo.com/html/"
             data = {'q': query, 'b': '', 'kl': 'us-en'}
             
-            # Arama öncesi rastgele bekleme
-            wait_time = random.uniform(2, 4)
-            print(f"   ⏳ Arama öncesi bekleme: {wait_time:.1f}s")
+            # Uzun bekleme
+            wait_time = random.uniform(3, 6)
+            print(f"   ⏳ Arama öncesi {wait_time:.1f}s bekleme...")
             time.sleep(wait_time)
             
-            response = requests.post(url, data=data, headers=headers, timeout=20)
+            response = requests.post(url, data=data, headers=headers, timeout=25)
             
             if response.status_code == 200:
                 results = self.parse_enhanced_results(response.text, max_results)
@@ -265,9 +286,8 @@ class EnhancedSearcher:
                 
                 if url and '//duckduckgo.com/l/' in url:
                     try:
-                        # Redirect için bekleme
-                        time.sleep(1)
-                        redirect_response = requests.get(url, timeout=8, allow_redirects=True)
+                        time.sleep(2)  # Redirect için uzun bekleme
+                        redirect_response = requests.get(url, timeout=10, allow_redirects=True)
                         url = redirect_response.url
                     except:
                         pass
@@ -312,7 +332,7 @@ class QuickEURLexChecker:
         self.sanction_cache = {}
     
     def quick_check_gtip(self, gtip_codes):
-        """Hızlı GTIP kontrolü"""
+        """Hızlı GTIP kontrolü - uzun bekleme"""
         if not gtip_codes:
             return []
             
@@ -329,9 +349,8 @@ class QuickEURLexChecker:
                 continue
                 
             try:
-                # EUR-Lex öncesi bekleme
-                wait_time = random.uniform(1, 2)
-                print(f"   ⏳ EUR-Lex öncesi bekleme: {wait_time:.1f}s")
+                wait_time = random.uniform(2, 4)
+                print(f"   ⏳ EUR-Lex öncesi {wait_time:.1f}s bekleme...")
                 time.sleep(wait_time)
                 
                 url = "https://eur-lex.europa.eu/search.html"
@@ -345,7 +364,7 @@ class QuickEURLexChecker:
                     'User-Agent': random.choice(self.config.USER_AGENTS),
                 }
                 
-                response = requests.get(url, params=params, headers=headers, timeout=10)
+                response = requests.get(url, params=params, headers=headers, timeout=15)
                 
                 if response.status_code == 200:
                     soup = BeautifulSoup(response.text, 'html.parser')
@@ -378,25 +397,26 @@ class EnhancedTradeAnalyzer:
         self.eur_lex_checker = QuickEURLexChecker(config)
     
     def enhanced_analyze(self, company, country):
-        """Gelişmiş analiz - daha yavaş ve kararlı"""
+        """Gelişmiş analiz - çoklu sorgu ve uzun süreli"""
         print(f"🤖 GELİŞMİŞ ANALİZ BAŞLATILIYOR: {company} ↔ {country}")
         
         search_queries = [
             f"{company} {country} export",
             f"{company} {country} business",
-            f"{company} {country} HS code"
+            f"{company} {country} HS code",
+            f"{company} {country} trade"
         ]
         
         all_results = []
         
-        for i, query in enumerate(search_queries[:2], 1):
+        for i, query in enumerate(search_queries, 1):
             try:
-                print(f"\n🔍 Sorgu {i}/2: {query}")
+                print(f"\n🔍 Sorgu {i}/4: {query}")
                 
-                # Sorgular arası bekleme
+                # Sorgular arası uzun bekleme
                 if i > 1:
-                    wait_time = random.uniform(4, 7)
-                    print(f"   ⏳ Sorgular arası bekleme: {wait_time:.1f}s")
+                    wait_time = random.uniform(5, 10)
+                    print(f"   ⏳ Sorgular arası {wait_time:.1f}s bekleme...")
                     time.sleep(wait_time)
                 
                 search_results = self.searcher.enhanced_search(query, self.config.MAX_RESULTS)
@@ -408,10 +428,10 @@ class EnhancedTradeAnalyzer:
                 for j, result in enumerate(search_results, 1):
                     print(f"   📄 Sonuç {j} analiz ediliyor: {result['title'][:50]}...")
                     
-                    # Sonuçlar arası kısa bekleme
+                    # Sonuçlar arası uzun bekleme
                     if j > 1:
-                        wait_time = random.uniform(1, 3)
-                        print(f"   ⏳ Sonuçlar arası bekleme: {wait_time:.1f}s")
+                        wait_time = random.uniform(3, 6)
+                        print(f"   ⏳ Sonuçlar arası {wait_time:.1f}s bekleme...")
                         time.sleep(wait_time)
                     
                     # Gelişmiş crawl

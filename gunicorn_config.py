@@ -1,19 +1,25 @@
 import multiprocessing
 
 # Worker sayısı
-workers = 1
+workers = 2
+
+# Worker class'ı
 worker_class = 'sync'
 
-# Timeout süreleri - Render için optimize
-timeout = 30
-graceful_timeout = 10
-keepalive = 2
+# Timeout süresi (saniye) - Render'ın 30s limitinden uzun tutalım
+timeout = 300  # 5 dakika
+
+# Worker bağlantıları
+worker_connections = 1000
+
+# Max requests
+max_requests = 1000
+max_requests_jitter = 50
 
 # Logging
 accesslog = '-'
 errorlog = '-'
 loglevel = 'info'
 
-# Worker başlangıç
-def on_starting(server):
-    print("🚀 OPTİMİZE CRAWLER SİSTEMİ BAŞLATILIYOR...")
+# Bind
+bind = '0.0.0.0:5000'
