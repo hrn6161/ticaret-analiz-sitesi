@@ -10,7 +10,7 @@ import sys
 import logging
 import os
 from datetime import datetime
-import threading
+import cloudscraper
 
 app = Flask(__name__)
 
@@ -25,36 +25,45 @@ logging.basicConfig(
 class Config:
     def __init__(self):
         self.MAX_RESULTS = 3
-        self.REQUEST_TIMEOUT = 30  # Uzun timeout
+        self.REQUEST_TIMEOUT = 30
         self.RETRY_ATTEMPTS = 2
         self.MAX_GTIP_CHECK = 3
         self.USER_AGENTS = [
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
         ]
 
 class AdvancedCrawler:
     def __init__(self, config):
         self.config = config
+        # Cloudscraper ile bot koruması aşma
+        self.scraper = cloudscraper.create_scraper()
     
     def advanced_crawl(self, url, target_country):
-        """Gelişmiş crawl - uzun bekleme"""
+        """Gelişmiş crawl - cloudscraper ile"""
         logging.info(f"🌐 Crawl: {url[:60]}...")
         
         # Domain'e özel bekleme
         domain = self._extract_domain(url)
         if any(site in domain for site in ['trademo.com', 'volza.com', 'eximpedia.app']):
-            wait_time = random.uniform(3, 6)
+            wait_time = random.uniform(5, 8)  # Daha uzun bekleme
             logging.info(f"⏳ {domain} için {wait_time:.1f}s bekleme...")
             time.sleep(wait_time)
         
-        # Önce sayfayı dene
+        # Önce cloudscraper ile dene
+        page_result = self._try_cloudscraper_crawl(url, target_country)
+        if page_result['status_code'] == 200:
+            return page_result
+        
+        # Cloudscraper başarısızsa, normal requests ile dene
         page_result = self._try_page_crawl(url, target_country)
         if page_result['status_code'] == 200:
             return page_result
         
-        # Sayfa başarısızsa, snippet'i derinlemesine analiz et
+        # Her ikisi de başarısızsa snippet analizi
         logging.info(f"🔍 Snippet derinlemesine analiz: {url}")
         snippet_analysis = self.analyze_snippet_deep("", target_country, url)
         return {
@@ -64,9 +73,11 @@ class AdvancedCrawler:
             'status_code': 'SNIPPET_ANALYSIS'
         }
     
-    def _try_page_crawl(self, url, target_country):
-        """Sayfa crawl dene - uzun timeout"""
+    def _try_cloudscraper_crawl(self, url, target_country):
+        """Cloudscraper ile crawl dene"""
         try:
+            logging.info(f"☁️ Cloudscraper ile deneme: {url}")
+            
             headers = {
                 'User-Agent': random.choice(self.config.USER_AGENTS),
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -74,6 +85,7 @@ class AdvancedCrawler:
                 'Accept-Encoding': 'gzip, deflate, br',
                 'Connection': 'keep-alive',
                 'DNT': '1',
+                'Upgrade-Insecure-Requests': '1',
             }
             
             # Özel domain'ler için headers
@@ -84,6 +96,7 @@ class AdvancedCrawler:
                     'Sec-Fetch-Dest': 'document',
                     'Sec-Fetch-Mode': 'navigate',
                     'Sec-Fetch-Site': 'none',
+                    'Sec-Fetch-User': '?1',
                 })
             elif 'volza.com' in domain:
                 headers.update({
@@ -96,18 +109,67 @@ class AdvancedCrawler:
                     'Sec-Fetch-Dest': 'document',
                 })
             
-            response = requests.get(url, headers=headers, timeout=20)  # Uzun timeout
+            response = self.scraper.get(url, headers=headers, timeout=25)
             
             if response.status_code == 200:
+                logging.info(f"✅ Cloudscraper başarılı: {url}")
+                return self._parse_advanced_content(response.text, target_country, response.status_code)
+            else:
+                logging.warning(f"❌ Cloudscraper hatası {response.status_code}: {url}")
+                return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': response.status_code}
+        except Exception as e:
+            logging.warning(f"❌ Cloudscraper hatası: {e}")
+            return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'CLOUDSCRAPER_ERROR'}
+    
+    def _try_page_crawl(self, url, target_country):
+        """Normal requests ile crawl dene"""
+        try:
+            logging.info(f"🌐 Normal requests ile deneme: {url}")
+            
+            headers = {
+                'User-Agent': random.choice(self.config.USER_AGENTS),
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive',
+                'DNT': '1',
+                'Upgrade-Insecure-Requests': '1',
+            }
+            
+            # Özel domain'ler için headers
+            domain = self._extract_domain(url)
+            if 'trademo.com' in domain:
+                headers.update({
+                    'Referer': 'https://www.trademo.com/',
+                    'Sec-Fetch-Dest': 'document',
+                    'Sec-Fetch-Mode': 'navigate',
+                    'Sec-Fetch-Site': 'none',
+                    'Sec-Fetch-User': '?1',
+                })
+            elif 'volza.com' in domain:
+                headers.update({
+                    'Referer': 'https://www.volza.com/',
+                    'Sec-Fetch-Dest': 'document',
+                })
+            elif 'eximpedia.app' in domain:
+                headers.update({
+                    'Referer': 'https://www.eximpedia.app/',
+                    'Sec-Fetch-Dest': 'document',
+                })
+            
+            response = requests.get(url, headers=headers, timeout=20)
+            
+            if response.status_code == 200:
+                logging.info(f"✅ Normal requests başarılı: {url}")
                 return self._parse_advanced_content(response.text, target_country, response.status_code)
             elif response.status_code == 403:
-                logging.warning(f"🔒 403 Forbidden: {url} - Snippet analizine geçiliyor")
+                logging.warning(f"🔒 403 Forbidden: {url}")
                 return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 403}
             else:
                 logging.warning(f"❌ Sayfa hatası {response.status_code}: {url}")
                 return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': response.status_code}
         except requests.exceptions.Timeout:
-            logging.warning(f"⏰ Timeout: {url} - Snippet analizine geçiliyor")
+            logging.warning(f"⏰ Timeout: {url}")
             return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'TIMEOUT'}
         except Exception as e:
             logging.error(f"❌ Sayfa crawl hatası: {e}")
@@ -212,6 +274,7 @@ class AdvancedCrawler:
                 (r'8708.*hs code', '8708', 'gtip'),
                 (r'870830', '8708', 'gtip'),
                 (r'8708\.30', '8708', 'gtip'),
+                (r'trademo', 'trademo', 'domain_trust'),  # Trademo domain güveni
             ]
             
             for pattern, value, pattern_type in special_patterns:
@@ -244,7 +307,7 @@ class EnhancedSearcher:
         self.crawler = AdvancedCrawler(config)
     
     def enhanced_search(self, query, max_results=3):
-        """Gelişmiş arama - uzun bekleme"""
+        """Gelişmiş arama - cloudscraper ile"""
         try:
             logging.info(f"🔍 DuckDuckGo: {query}")
             
@@ -261,7 +324,9 @@ class EnhancedSearcher:
             logging.info(f"⏳ Arama öncesi {wait_time:.1f}s bekleme...")
             time.sleep(wait_time)
             
-            response = requests.post(url, data=data, headers=headers, timeout=25)
+            # Cloudscraper ile arama yap
+            scraper = cloudscraper.create_scraper()
+            response = scraper.post(url, data=data, headers=headers, timeout=25)
             
             if response.status_code == 200:
                 results = self.parse_enhanced_results(response.text, max_results)
@@ -290,8 +355,9 @@ class EnhancedSearcher:
                 
                 if url and '//duckduckgo.com/l/' in url:
                     try:
-                        time.sleep(2)  # Redirect için uzun bekleme
-                        redirect_response = requests.get(url, timeout=10, allow_redirects=True)
+                        time.sleep(2)
+                        scraper = cloudscraper.create_scraper()
+                        redirect_response = scraper.get(url, timeout=10, allow_redirects=True)
                         url = redirect_response.url
                     except:
                         pass
@@ -333,7 +399,7 @@ class QuickEURLexChecker:
         self.sanction_cache = {}
     
     def quick_check_gtip(self, gtip_codes):
-        """Hızlı GTIP kontrolü - uzun bekleme"""
+        """Hızlı GTIP kontrolü"""
         if not gtip_codes:
             return []
             
@@ -398,7 +464,7 @@ class EnhancedTradeAnalyzer:
         self.eur_lex_checker = QuickEURLexChecker(config)
     
     def enhanced_analyze(self, company, country):
-        """Gelişmiş analiz - çoklu sorgu ve uzun süreli"""
+        """Gelişmiş analiz - cloudscraper ile"""
         logging.info(f"🤖 GELİŞMİŞ ANALİZ BAŞLATILIYOR: {company} ↔ {country}")
         
         search_queries = [
@@ -435,7 +501,7 @@ class EnhancedTradeAnalyzer:
                         logging.info(f"⏳ Sonuçlar arası {wait_time:.1f}s bekleme...")
                         time.sleep(wait_time)
                     
-                    # Gelişmiş crawl
+                    # Gelişmiş crawl (cloudscraper ile)
                     crawl_result = self.crawler.advanced_crawl(result['url'], country)
                     
                     # Eğer sayfaya erişilemediyse, snippet derinlemesine analiz
@@ -446,7 +512,7 @@ class EnhancedTradeAnalyzer:
                             crawl_result['gtip_codes'] = snippet_analysis['gtip_codes']
                             logging.info(f"🔍 Snippet analizi sonucu: Ülke={snippet_analysis['country_found']}, GTIP={snippet_analysis['gtip_codes']}")
                     
-                    # EUR-Lex kontrolü (sadece GTIP varsa)
+                    # EUR-Lex kontrolü
                     sanctioned_gtips = []
                     if crawl_result['gtip_codes']:
                         logging.info(f"🔍 EUR-Lex kontrolü yapılıyor...")
@@ -550,6 +616,7 @@ class EnhancedTradeAnalyzer:
             'NEDENLER': ' | '.join(reasons) if reasons else 'Belirsiz'
         }
 
+# Kalan fonksiyonlar aynı kalacak...
 def create_detailed_excel_report(results, company, country):
     """Detaylı Excel raporu"""
     try:
