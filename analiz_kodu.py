@@ -10,8 +10,9 @@ import logging
 import os
 from datetime import datetime
 import cloudscraper
+import urllib.parse
 
-print("🚀 SADECE DUCKDUCKGO İLE TİCARET ANALİZ SİSTEMİ")
+print("🚀 TAM ŞİRKET İSİMLİ GELİŞMİŞ TİCARET ANALİZ SİSTEMİ")
 
 # Logging setup
 logging.basicConfig(
@@ -25,13 +26,14 @@ logging.basicConfig(
 
 class Config:
     def __init__(self):
-        self.MAX_RESULTS = 5
+        self.MAX_RESULTS = 10
         self.REQUEST_TIMEOUT = 30
         self.RETRY_ATTEMPTS = 2
         self.MAX_GTIP_CHECK = 3
         self.USER_AGENTS = [
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         ]
 
 class AdvancedCrawler:
@@ -43,66 +45,22 @@ class AdvancedCrawler:
         """Gelişmiş crawl"""
         print(f"   🌐 Crawl: {url[:60]}...")
         
-        domain = self._extract_domain(url)
-        if any(site in domain for site in ['trademo.com', 'volza.com', 'eximpedia.app']):
-            wait_time = random.uniform(8, 12)
-            print(f"   ⏳ {domain} için {wait_time:.1f}s bekleme...")
-            time.sleep(wait_time)
-        
-        page_result = self._try_cloudscraper_crawl(url, target_country)
-        if page_result['status_code'] == 200:
-            return page_result
-        
-        page_result = self._try_page_crawl(url, target_country)
-        if page_result['status_code'] == 200:
-            return page_result
-        
-        print(f"   🔍 Snippet analizi: {url}")
-        return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'SNIPPET_ANALYSIS'}
-    
-    def _try_cloudscraper_crawl(self, url, target_country):
-        """Cloudscraper ile crawl"""
         try:
-            print(f"   ☁️ Cloudscraper: {url}")
-            
             headers = {
                 'User-Agent': random.choice(self.config.USER_AGENTS),
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             }
             
-            response = self.scraper.get(url, headers=headers, timeout=25)
+            response = self.scraper.get(url, headers=headers, timeout=20)
             
             if response.status_code == 200:
-                print(f"   ✅ Cloudscraper başarılı: {url}")
                 return self._parse_advanced_content(response.text, target_country, response.status_code)
-            else:
-                print(f"   ❌ Cloudscraper hatası {response.status_code}: {url}")
-                return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': response.status_code}
-        except Exception as e:
-            print(f"   ❌ Cloudscraper hatası: {e}")
-            return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'CLOUDSCRAPER_ERROR'}
-    
-    def _try_page_crawl(self, url, target_country):
-        """Normal requests ile crawl"""
-        try:
-            print(f"   🌐 Normal requests: {url}")
-            
-            headers = {
-                'User-Agent': random.choice(self.config.USER_AGENTS),
-            }
-            
-            response = requests.get(url, headers=headers, timeout=20)
-            
-            if response.status_code == 200:
-                print(f"   ✅ Normal requests başarılı: {url}")
-                return self._parse_advanced_content(response.text, target_country, response.status_code)
-            elif response.status_code == 403:
-                print(f"   🔒 403 Forbidden: {url}")
-                return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 403}
             else:
                 print(f"   ❌ Sayfa hatası {response.status_code}: {url}")
                 return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': response.status_code}
+                
         except Exception as e:
-            print(f"   ❌ Sayfa crawl hatası: {e}")
+            print(f"   ❌ Crawl hatası: {e}")
             return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'ERROR'}
     
     def _parse_advanced_content(self, html, target_country, status_code):
@@ -136,7 +94,7 @@ class AdvancedCrawler:
             'russia', 'rusya', 'rusian', 'rus'
         ]
         
-        trade_terms = ['export', 'import', 'country', 'origin', 'destination', 'trade']
+        trade_terms = ['export', 'import', 'country', 'origin', 'destination', 'trade', 'supplier', 'buyer']
         
         for country_var in country_variations:
             if country_var in text_lower:
@@ -154,6 +112,7 @@ class AdvancedCrawler:
             r'\b\d{6}\b',
             r'\bHS\s?CODE\s?:?\s?(\d{4,8})\b',
             r'\bGTIP\s?:?\s?(\d{4,8})\b',
+            r'\bH.S\.\s?CODE\s?:?\s?(\d{4,8})\b',
         ]
         
         all_codes = set()
@@ -170,14 +129,12 @@ class AdvancedCrawler:
         
         return list(all_codes)
     
-    def analyze_snippet_deep(self, snippet_text, target_country):
+    def analyze_snippet_deep(self, snippet_text, target_country, url=""):
         """Snippet analizi"""
-        if not snippet_text:
-            return {'country_found': False, 'gtip_codes': []}
+        domain = self._extract_domain(url)
+        combined_text = f"{snippet_text} {domain}".lower()
         
-        text_lower = snippet_text.lower()
-        
-        country_found = self._check_country_advanced(text_lower, target_country)
+        country_found = self._check_country_advanced(combined_text, target_country)
         gtip_codes = self.extract_advanced_gtip_codes(snippet_text)
         
         return {
@@ -193,84 +150,126 @@ class AdvancedCrawler:
         except:
             return ""
 
-class DuckDuckGoSearcher:
+class AdvancedDuckDuckGoSearcher:
     def __init__(self, config):
         self.config = config
-        print("   🦆 DuckDuckGo arama motoru hazır!")
+        self.scraper = cloudscraper.create_scraper()
+        print("   🦆 Gelişmiş DuckDuckGo arama motoru hazır!")
     
-    def duckduckgo_search(self, query, max_results=5):
-        """DuckDuckGo arama - TEK ANA YÖNTEM"""
+    def search_with_retry(self, query, max_results=10):
+        """Gelişmiş DuckDuckGo arama - Retry mekanizmalı"""
+        for attempt in range(2):
+            try:
+                print(f"   🔍 DuckDuckGo Search (Deneme {attempt+1}): {query}")
+                
+                wait_time = random.uniform(2, 4)
+                time.sleep(wait_time)
+                
+                if attempt == 0:
+                    results = self._search_method1(query, max_results)
+                else:
+                    results = self._search_method2(query, max_results)
+                
+                if results:
+                    print(f"   ✅ DuckDuckGo {len(results)} sonuç buldu")
+                    return results
+                else:
+                    print(f"   ⚠️ DuckDuckGo sonuç bulamadı (Deneme {attempt+1})")
+                    
+            except Exception as e:
+                print(f"   ❌ DuckDuckGo hatası (Deneme {attempt+1}): {e}")
+                continue
+        
+        return []
+    
+    def _search_method1(self, query, max_results):
+        """İlk yöntem: HTML endpoint"""
         try:
-            print(f"   🔍 DuckDuckGo Search: {query}")
-            
-            wait_time = random.uniform(3, 5)
-            print(f"   ⏳ DuckDuckGo öncesi {wait_time:.1f}s bekleme...")
-            time.sleep(wait_time)
+            url = "https://html.duckduckgo.com/html/"
+            data = {
+                'q': query,
+                'b': '',
+                'kl': 'us-en'
+            }
             
             headers = {
                 'User-Agent': random.choice(self.config.USER_AGENTS),
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Connection': 'keep-alive',
+                'Content-Type': 'application/x-www-form-urlencoded'
             }
             
-            url = "https://html.duckduckgo.com/html/"
-            data = {
-                'q': query, 
-                'b': '', 
-                'kl': 'us-en'
-            }
+            response = self.scraper.post(url, data=data, headers=headers, timeout=15)
+            return self._parse_html_results(response.text, max_results)
             
-            print(f"   🌐 DuckDuckGo isteği: {query}")
-            scraper = cloudscraper.create_scraper()
-            response = scraper.post(url, data=data, headers=headers, timeout=20)
-            
-            if response.status_code == 200:
-                results = self.parse_duckduckgo_results(response.text, max_results)
-                print(f"   ✅ DuckDuckGo {len(results)} sonuç buldu")
-                return results
-            else:
-                print(f"   ❌ DuckDuckGo hatası {response.status_code}")
-                return []
         except Exception as e:
-            print(f"   ❌ DuckDuckGo arama hatası: {e}")
+            print(f"   ❌ Method1 hatası: {e}")
             return []
     
-    def parse_duckduckgo_results(self, html, max_results):
-        """DuckDuckGo sonuçlarını parse et"""
+    def _search_method2(self, query, max_results):
+        """İkinci yöntem: Lite endpoint"""
+        try:
+            encoded_query = urllib.parse.quote_plus(query)
+            url = f"https://lite.duckduckgo.com/lite/?q={encoded_query}"
+            
+            headers = {
+                'User-Agent': random.choice(self.config.USER_AGENTS),
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            }
+            
+            response = self.scraper.get(url, headers=headers, timeout=15)
+            return self._parse_lite_results(response.text, max_results)
+            
+        except Exception as e:
+            print(f"   ❌ Method2 hatası: {e}")
+            return []
+    
+    def _parse_html_results(self, html, max_results):
+        """HTML sonuçlarını parse et"""
         soup = BeautifulSoup(html, 'html.parser')
         results = []
         
-        for div in soup.find_all('div', class_='result')[:max_results]:
+        # Birden fazla olası selector
+        selectors = [
+            'div.result',
+            'div.web-result',
+            'div.result__body',
+            'div.links_main'
+        ]
+        
+        for selector in selectors:
+            results_elements = soup.find_all('div', class_=selector)[:max_results]
+            if results_elements:
+                break
+        
+        for element in results_elements:
             try:
-                title_elem = div.find('a', class_='result__a')
+                title_elem = (element.find('a', class_='result__a') or 
+                             element.find('a', class_='web-result__link') or
+                             element.find('h2') or
+                             element.find('a'))
+                
                 if not title_elem:
                     continue
                     
                 title = title_elem.get_text(strip=True)
                 url = title_elem.get('href')
                 
-                # Redirect handling - DuckDuckGo redirect linklerini takip et
-                if url and '//duckduckgo.com/l/' in url:
-                    try:
-                        print(f"      🔄 Redirect takip ediliyor: {url}")
-                        time.sleep(1)
-                        scraper = cloudscraper.create_scraper()
-                        redirect_response = scraper.get(url, timeout=10, allow_redirects=True)
-                        url = redirect_response.url
-                        print(f"      ✅ Redirect sonucu: {url}")
-                    except Exception as e:
-                        print(f"      ⚠️ Redirect hatası: {e}")
+                # DuckDuckGo redirect linklerini çöz
+                if url and ('//duckduckgo.com/l/' in url or url.startswith('/l/')):
+                    url = self._resolve_redirect(url)
+                    if not url:
                         continue
                 
-                snippet_elem = div.find('a', class_='result__snippet')
+                snippet_elem = (element.find('a', class_='result__snippet') or
+                               element.find('div', class_='result__snippet') or
+                               element.find('div', class_='web-result__description') or
+                               element.find('td', class_='result-snippet'))
+                
                 snippet = snippet_elem.get_text(strip=True) if snippet_elem else ""
                 
                 if url and url.startswith('//'):
                     url = 'https:' + url
                 
-                # Geçerli bir URL kontrolü
                 if not url or not url.startswith('http'):
                     continue
                 
@@ -283,14 +282,69 @@ class DuckDuckGoSearcher:
                     'search_engine': 'duckduckgo'
                 })
                 
-                print(f"      📄 DuckDuckGo: {title[:50]}...")
-                print(f"      🌐 URL: {url[:80]}...")
+                print(f"      📄 Bulundu: {title[:50]}...")
                 
             except Exception as e:
-                print(f"      ❌ DuckDuckGo sonuç parse hatası: {e}")
+                print(f"      ❌ Sonuç parse hatası: {e}")
                 continue
         
         return results
+    
+    def _parse_lite_results(self, html, max_results):
+        """Lite sonuçlarını parse et"""
+        soup = BeautifulSoup(html, 'html.parser')
+        results = []
+        
+        tables = soup.find_all('table')
+        
+        for table in tables[:max_results]:
+            try:
+                links = table.find_all('a', href=True)
+                for link in links:
+                    title = link.get_text(strip=True)
+                    url = link.get('href')
+                    
+                    if url and ('duckduckgo.com' not in url) and url.startswith('http'):
+                        snippet = ""
+                        next_row = table.find_next_sibling('tr')
+                        if next_row:
+                            snippet_cell = next_row.find('td')
+                            if snippet_cell:
+                                snippet = snippet_cell.get_text(strip=True)
+                        
+                        results.append({
+                            'title': title,
+                            'url': url,
+                            'snippet': snippet,
+                            'full_text': f"{title} {snippet}",
+                            'domain': self._extract_domain(url),
+                            'search_engine': 'duckduckgo'
+                        })
+                        
+                        print(f"      📄 Lite: {title[:50]}...")
+                        break
+                        
+            except Exception as e:
+                continue
+        
+        return results
+    
+    def _resolve_redirect(self, redirect_url):
+        """Redirect URL'lerini çöz"""
+        try:
+            if redirect_url.startswith('/l/'):
+                redirect_url = 'https://duckduckgo.com' + redirect_url
+            
+            headers = {
+                'User-Agent': random.choice(self.config.USER_AGENTS),
+            }
+            
+            response = self.scraper.get(redirect_url, headers=headers, timeout=8, allow_redirects=True)
+            return response.url
+            
+        except Exception as e:
+            print(f"      ⚠️ Redirect çözme hatası: {e}")
+            return None
     
     def _extract_domain(self, url):
         """URL'den domain çıkar"""
@@ -300,15 +354,67 @@ class DuckDuckGoSearcher:
         except:
             return ""
 
-class EnhancedSearcher:
-    def __init__(self, config):
-        self.config = config
-        self.ddg_searcher = DuckDuckGoSearcher(config)
-        print("   🎯 Sadece DuckDuckGo arama motoru aktif!")
+class ExactMatchQueryGenerator:
+    """TAM ŞİRKET İSİMLİ sorgu generator"""
     
-    def enhanced_search(self, query, max_results=5):
-        """SADECE DuckDuckGo ile arama"""
-        return self.ddg_searcher.duckduckgo_search(query, max_results)
+    @staticmethod
+    def generate_queries(company, country):
+        """TAM ŞİRKET İSMİ ile optimize edilmiş sorgular"""
+        
+        queries = []
+        
+        # TAM ŞİRKET İSMİ ile temel sorgular
+        base_queries = [
+            f'"{company}" "{country}"',  # Tırnak içinde tam eşleşme
+            f'"{company}" {country} export',
+            f'"{company}" {country} import',
+            f'"{company}" {country} trade',
+            f'"{company}" Russia',  # Rusya için özel
+            f'"{company}" export Russia',
+            f'"{company}" import Russia',
+            f"{company} {country} export",  # Tırnaksız da deneyelim
+            f"{company} {country} import",
+            f"{company} {country} trade",
+        ]
+        
+        # Ticaret verisi sorguları - TAM İSİM
+        trade_queries = [
+            f'"{company}" customs data',
+            f'"{company}" trade data',
+            f'"{company}" shipping',
+            f'"{company}" supplier',
+            f'"{company}" buyer',
+            f'"{company}" HS code',
+            f'"{company}" GTIP',
+        ]
+        
+        # Platform özel sorguları - TAM İSİM
+        platform_queries = [
+            f'"{company}" site:trademo.com',
+            f'"{company}" site:volza.com', 
+            f'"{company}" site:eximpedia.app',
+            f'"{company}" site:importyet.com',
+            f'"{company}" site:exportgenius.in',
+            f'"{company}" site:seair.co.in',
+        ]
+        
+        # Tüm sorguları birleştir - TAM İSİM öncelikli
+        queries.extend(base_queries)
+        queries.extend(trade_queries)
+        queries.extend(platform_queries)
+        
+        # Ek olarak tırnaksız sorgular da ekleyelim
+        additional_queries = [
+            f"{company} {country} business",
+            f"{company} Russia business",
+            f"{company} international trade",
+            f"{company} overseas",
+        ]
+        
+        queries.extend(additional_queries)
+        
+        print(f"   🔍 Oluşturulan TAM İSİMLİ sorgular: {queries[:5]}...")  # İlk 5'ini göster
+        return queries
 
 class QuickEURLexChecker:
     def __init__(self, config):
@@ -332,7 +438,7 @@ class QuickEURLexChecker:
                 continue
                 
             try:
-                wait_time = random.uniform(2, 4)
+                wait_time = random.uniform(1, 2)
                 time.sleep(wait_time)
                 
                 url = "https://eur-lex.europa.eu/search.html"
@@ -346,13 +452,13 @@ class QuickEURLexChecker:
                     'User-Agent': random.choice(self.config.USER_AGENTS),
                 }
                 
-                response = requests.get(url, params=params, headers=headers, timeout=15)
+                response = requests.get(url, params=params, headers=headers, timeout=10)
                 
                 if response.status_code == 200:
                     soup = BeautifulSoup(response.text, 'html.parser')
                     content = soup.get_text().lower()
                     
-                    sanction_terms = ['prohibited', 'banned', 'sanction', 'restricted']
+                    sanction_terms = ['prohibited', 'banned', 'sanction', 'restricted', 'embargo']
                     found_sanction = any(term in content for term in sanction_terms)
                     
                     if found_sanction:
@@ -371,52 +477,56 @@ class QuickEURLexChecker:
 class EnhancedTradeAnalyzer:
     def __init__(self, config):
         self.config = config
-        self.searcher = EnhancedSearcher(config)
+        self.searcher = AdvancedDuckDuckGoSearcher(config)
         self.crawler = AdvancedCrawler(config)
         self.eur_lex_checker = QuickEURLexChecker(config)
+        self.query_generator = ExactMatchQueryGenerator()
     
     def enhanced_analyze(self, company, country):
-        """Gelişmiş analiz - SADECE DUCKDUCKGO"""
-        print(f"🤖 SADECE DUCKDUCKGO İLE ANALİZ BAŞLATILIYOR: {company} ↔ {country}")
+        """Gelişmiş analiz - TAM ŞİRKET İSMİ ile"""
+        print(f"🤖 TAM ŞİRKET İSİMLİ ANALİZ BAŞLATILIYOR: '{company}' ↔ {country}")
         
-        search_queries = [
-            f"{company} {country} trade",
-            f"{company} {country} export", 
-            f"{company} trade data",
-            f"{company} {country} business",
-            f"{company} {country} import export",
-            f'"{company}" "{country}"',
-            f"{company} {country} customs data"
-        ]
+        # TAM ŞİRKET İSİMLİ sorgular oluştur
+        search_queries = self.query_generator.generate_queries(company, country)
         
         all_results = []
+        found_urls = set()
         
         for i, query in enumerate(search_queries, 1):
             try:
                 print(f"\n🔍 Sorgu {i}/{len(search_queries)}: {query}")
                 
                 if i > 1:
-                    wait_time = random.uniform(8, 12)
+                    wait_time = random.uniform(3, 6)
                     print(f"   ⏳ Sorgular arası {wait_time:.1f}s bekleme...")
                     time.sleep(wait_time)
                 
-                search_results = self.searcher.enhanced_search(query, self.config.MAX_RESULTS)
+                search_results = self.searcher.search_with_retry(query, self.config.MAX_RESULTS)
                 
                 if not search_results:
-                    print(f"   ⚠️ DuckDuckGo sonuç bulamadı")
+                    print(f"   ⚠️ Sonuç bulunamadı")
                     continue
                 
                 for j, result in enumerate(search_results, 1):
+                    if result['url'] in found_urls:
+                        continue
+                    
+                    found_urls.add(result['url'])
+                    
                     print(f"   📄 Sonuç {j}: {result['title'][:40]}...")
                     
+                    # Şirket ismi kontrolü - TAM EŞLEŞME önemli
+                    if self._check_company_match(result['full_text'], company):
+                        print(f"   🎯 TAM ŞİRKET EŞLEŞMESİ: {company}")
+                    
                     if j > 1:
-                        wait_time = random.uniform(4, 6)
-                        time.sleep(wait_time)
+                        time.sleep(random.uniform(1, 3))
                     
                     crawl_result = self.crawler.advanced_crawl(result['url'], country)
                     
-                    if crawl_result['status_code'] != 200:
-                        snippet_analysis = self.crawler.analyze_snippet_deep(result['full_text'], country)
+                    # Snippet analizi ile destekle
+                    if not crawl_result['country_found'] and not crawl_result['gtip_codes']:
+                        snippet_analysis = self.crawler.analyze_snippet_deep(result['full_text'], country, result['url'])
                         if snippet_analysis['country_found'] or snippet_analysis['gtip_codes']:
                             crawl_result['country_found'] = snippet_analysis['country_found']
                             crawl_result['gtip_codes'] = snippet_analysis['gtip_codes']
@@ -425,13 +535,18 @@ class EnhancedTradeAnalyzer:
                     if crawl_result['gtip_codes']:
                         sanctioned_gtips = self.eur_lex_checker.quick_check_gtip(crawl_result['gtip_codes'])
                     
-                    confidence = self._calculate_confidence(crawl_result, sanctioned_gtips, result['domain'])
+                    confidence = self._calculate_confidence(crawl_result, sanctioned_gtips, result['domain'], result['full_text'], company)
                     
                     analysis = self.create_enhanced_analysis_result(
                         company, country, result, crawl_result, sanctioned_gtips, confidence
                     )
                     
                     all_results.append(analysis)
+                    
+                    # Yeterli sonuç bulduysak erken çık
+                    if len(all_results) >= 8:
+                        print("   🎯 Yeterli sonuç bulundu, analiz tamamlanıyor...")
+                        return all_results
                 
             except Exception as e:
                 print(f"   ❌ Sorgu hatası: {e}")
@@ -439,22 +554,44 @@ class EnhancedTradeAnalyzer:
         
         return all_results
     
-    def _calculate_confidence(self, crawl_result, sanctioned_gtips, domain):
+    def _check_company_match(self, text, company):
+        """Şirket ismi tam eşleşme kontrolü"""
+        text_lower = text.lower()
+        company_lower = company.lower()
+        
+        # Tam şirket ismi geçiyor mu?
+        if company_lower in text_lower:
+            return True
+        
+        # Şirket isminin önemli kısımlarını kontrol et
+        important_words = [word for word in company_lower.split() if len(word) > 3]
+        if len(important_words) >= 2:
+            match_count = sum(1 for word in important_words if word in text_lower)
+            if match_count >= len(important_words) - 1:  # En az n-1 kelime eşleşmeli
+                return True
+        
+        return False
+    
+    def _calculate_confidence(self, crawl_result, sanctioned_gtips, domain, full_text, company):
         """Güven seviyesi hesapla"""
         confidence = 0
+        
+        # TAM ŞİRKET EŞLEŞMESİ - EN ÖNEMLİ
+        if self._check_company_match(full_text, company):
+            confidence += 40
         
         trusted_domains = ['trademo.com', 'eximpedia.app', 'volza.com', 'importyet.com', 'emis.com']
         if any(trusted in domain for trusted in trusted_domains):
             confidence += 30
         
         if crawl_result['gtip_codes']:
-            confidence += 25
+            confidence += 20
         
         if crawl_result['country_found']:
-            confidence += 25
+            confidence += 20
         
         if sanctioned_gtips:
-            confidence += 20
+            confidence += 10
         
         return min(confidence, 100)
     
@@ -462,6 +599,8 @@ class EnhancedTradeAnalyzer:
         """Gelişmiş analiz sonucu"""
         
         reasons = []
+        if self._check_company_match(search_result['full_text'], company):
+            reasons.append("TAM ŞİRKET EŞLEŞMESİ")
         if crawl_result['country_found']:
             reasons.append("Ülke bağlantısı tespit edildi")
         if crawl_result['gtip_codes']:
@@ -571,7 +710,7 @@ def create_detailed_excel_report(results, company, country):
 def display_results(results, company, country):
     """Sonuçları göster"""
     print(f"\n{'='*80}")
-    print(f"📊 SADECE DUCKDUCKGO ANALİZ SONUÇLARI: {company} ↔ {country}")
+    print(f"📊 TAM ŞİRKET İSİMLİ ANALİZ SONUÇLARI: '{company}' ↔ {country}")
     print(f"{'='*80}")
     
     if not results:
@@ -582,9 +721,11 @@ def display_results(results, company, country):
     high_risk_count = len([r for r in results if r.get('YAPTIRIM_RISKI') == 'YÜKSEK'])
     medium_risk_count = len([r for r in results if r.get('YAPTIRIM_RISKI') == 'ORTA'])
     country_connection_count = len([r for r in results if r.get('ULKE_BAGLANTISI') == 'EVET'])
+    exact_match_count = len([r for r in results if 'TAM ŞİRKET EŞLEŞMESİ' in r.get('NEDENLER', '')])
     
     print(f"\n📈 ÖZET:")
     print(f"   • Toplam Sonuç: {total_results}")
+    print(f"   • TAM ŞİRKET EŞLEŞMESİ: {exact_match_count}")
     print(f"   • Ülke Bağlantısı: {country_connection_count}")
     print(f"   • YÜKSEK Yaptırım Riski: {high_risk_count}")
     print(f"   • ORTA Risk: {medium_risk_count}")
@@ -614,26 +755,26 @@ def display_results(results, company, country):
         print(f"   {'─'*60}")
 
 def main():
-    print("📊 SADECE DUCKDUCKGO İLE TİCARET ANALİZ SİSTEMİ")
-    print("🎯 HEDEF: DuckDuckGo ile güvenilir ve stabil analiz")
-    print("💡 AVANTAJ: JSON hatalarından tamamen kurtulma")
-    print("🦆 Tek Arama Motoru: DuckDuckGo\n")
+    print("📊 TAM ŞİRKET İSİMLİ TİCARET ANALİZ SİSTEMİ")
+    print("🎯 HEDEF: Tam şirket ismi ile kesin eşleşmeli analiz")
+    print("💡 AVANTAJ: Sadece ilgili sonuçlar, yüksek doğruluk")
+    print("🦆 Arama Motoru: DuckDuckGo\n")
     
     config = Config()
     analyzer = EnhancedTradeAnalyzer(config)
     
-    company = input("Şirket adını girin: ").strip()
+    company = input("Şirket adını girin (TAM İSİM): ").strip()
     country = input("Ülke adını girin: ").strip()
     
     if not company or not country:
         print("❌ Şirket ve ülke bilgisi gereklidir!")
         return
     
-    print(f"\n🚀 SADECE DUCKDUCKGO ANALİZİ BAŞLATILIYOR: {company} ↔ {country}")
-    print("⏳ DuckDuckGo ile arama yapılıyor...")
-    print("   Sayfalar analiz ediliyor...")
-    print("   GTIP kodları taranıyor...")
-    print("   Yaptırım kontrolü yapılıyor...\n")
+    print(f"\n🚀 TAM ŞİRKET İSİMLİ ANALİZ BAŞLATILIYOR: '{company}' ↔ {country}")
+    print("⏳ DuckDuckGo ile TAM İSİM araması yapılıyor...")
+    print("   Tırnak içinde sorgular oluşturuluyor...")
+    print("   Tam eşleşme kontrolü yapılıyor...")
+    print("   Sayfalar analiz ediliyor...\n")
     
     start_time = time.time()
     results = analyzer.enhanced_analyze(company, country)
