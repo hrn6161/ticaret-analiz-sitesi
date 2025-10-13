@@ -11,6 +11,7 @@ import logging
 import os
 from datetime import datetime
 import cloudscraper
+import json
 
 app = Flask(__name__)
 
@@ -218,16 +219,16 @@ class AdvancedCrawler:
 class GoogleSearcher:
     def __init__(self, config):
         self.config = config
-        # GOOGLE API CREDENTIALS - GÜNCELLENDİ
+        # GOOGLE API CREDENTIALS
         self.google_api_key = "AIzaSyC2A3ANshAolgr4hNNlFOtgNSlcQtIP40Y"
-        self.google_cse_id = "d65dec7934a544da1"  # YENİ CSE ID
+        self.google_cse_id = "d65dec7934a544da1"
         
         logging.info(f"🔑 Google API Key: {self.google_api_key[:10]}...")
         logging.info(f"🔍 Google CSE ID: {self.google_cse_id}")
         logging.info("✅ Google Custom Search API hazır!")
     
     def google_search(self, query, max_results=5):
-        """Google Custom Search API ile arama"""
+        """Google Custom Search API ile arama - Gelişmiş hata yönetimi"""
         try:
             logging.info(f"🔍 Google Search: {query}")
             
@@ -245,15 +246,31 @@ class GoogleSearcher:
             logging.info(f"🌐 Google API isteği: {query}")
             response = requests.get(endpoint, params=params, timeout=10)
             
+            # Response tipini kontrol et
+            content_type = response.headers.get('content-type', '')
+            
+            if 'application/json' not in content_type:
+                logging.error(f"❌ Google API JSON yerine HTML döndürdü: {content_type}")
+                logging.error(f"❌ Response ilk 200 karakter: {response.text[:200]}")
+                return []
+            
             if response.status_code == 200:
-                data = response.json()
-                results = self.parse_google_results(data)
-                logging.info(f"✅ Google {len(results)} sonuç buldu")
-                return results
+                try:
+                    data = response.json()
+                    results = self.parse_google_results(data)
+                    logging.info(f"✅ Google {len(results)} sonuç buldu")
+                    return results
+                except json.JSONDecodeError as e:
+                    logging.error(f"❌ JSON decode hatası: {e}")
+                    logging.error(f"❌ Response: {response.text[:500]}")
+                    return []
             else:
                 logging.warning(f"❌ Google API hatası {response.status_code}: {response.text[:200]}")
                 return []
                 
+        except requests.exceptions.RequestException as e:
+            logging.error(f"❌ Google API bağlantı hatası: {e}")
+            return []
         except Exception as e:
             logging.error(f"❌ Google arama hatası: {e}")
             return []
@@ -290,16 +307,17 @@ class DuckDuckGoSearcher:
     def __init__(self, config):
         self.config = config
     
-    def duckduckgo_search(self, query, max_results=3):
-        """DuckDuckGo fallback arama"""
+    def duckduckgo_search(self, query, max_results=5):
+        """DuckDuckGo arama - Ana yöntem olarak"""
         try:
-            logging.info(f"🔍 DuckDuckGo (fallback): {query}")
+            logging.info(f"🔍 DuckDuckGo Search: {query}")
             
             wait_time = random.uniform(3, 5)
             time.sleep(wait_time)
             
             headers = {
                 'User-Agent': random.choice(self.config.USER_AGENTS),
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             }
             
             url = "https://html.duckduckgo.com/html/"
@@ -333,6 +351,7 @@ class DuckDuckGoSearcher:
                 title = title_elem.get_text(strip=True)
                 url = title_elem.get('href')
                 
+                # Redirect handling
                 if url and '//duckduckgo.com/l/' in url:
                     try:
                         time.sleep(1)
@@ -357,7 +376,10 @@ class DuckDuckGoSearcher:
                     'search_engine': 'duckduckgo'
                 })
                 
+                logging.info(f"📄 DuckDuckGo: {title[:50]}...")
+                
             except Exception as e:
+                logging.error(f"❌ DuckDuckGo sonuç parse hatası: {e}")
                 continue
         
         return results
@@ -377,17 +399,17 @@ class EnhancedSearcher:
         self.ddg_searcher = DuckDuckGoSearcher(config)
     
     def enhanced_search(self, query, max_results=5):
-        """Akıllı arama - önce Google, sonra DuckDuckGo fallback"""
+        """Akıllı arama - DuckDuckGo ana, Google fallback"""
         
-        # Önce Google ile dene
-        google_results = self.google_searcher.google_search(query, max_results)
-        if google_results:
-            return google_results
-        
-        # Google başarısızsa DuckDuckGo fallback
-        logging.info("🔄 Google sonuç vermedi, DuckDuckGo deneniyor...")
+        # Önce DuckDuckGo ile dene (daha güvenilir)
         ddg_results = self.ddg_searcher.duckduckgo_search(query, max_results)
-        return ddg_results
+        if ddg_results:
+            return ddg_results
+        
+        # DuckDuckGo başarısızsa Google fallback
+        logging.info("🔄 DuckDuckGo sonuç vermedi, Google deneniyor...")
+        google_results = self.google_searcher.google_search(query, max_results)
+        return google_results
 
 class QuickEURLexChecker:
     def __init__(self, config):
@@ -455,8 +477,8 @@ class EnhancedTradeAnalyzer:
         self.eur_lex_checker = QuickEURLexChecker(config)
     
     def enhanced_analyze(self, company, country):
-        """Gelişmiş analiz - Google API ile"""
-        logging.info(f"🤖 GOOGLE CUSTOM SEARCH API İLE ANALİZ BAŞLATILIYOR: {company} ↔ {country}")
+        """Gelişmiş analiz - DuckDuckGo ana, Google fallback"""
+        logging.info(f"🤖 DUCKDUCKGO ANA, GOOGLE FALLBACK İLE ANALİZ BAŞLATILIYOR: {company} ↔ {country}")
         
         search_queries = [
             f"{company} {country} trade",
@@ -665,7 +687,7 @@ def analyze():
         if not company or not country:
             return jsonify({"error": "Şirket ve ülke bilgisi gereklidir"}), 400
         
-        logging.info(f"🚀 GOOGLE CUSTOM SEARCH API ANALİZİ BAŞLATILIYOR: {company} - {country}")
+        logging.info(f"🚀 DUCKDUCKGO ANA, GOOGLE FALLBACK ANALİZİ BAŞLATILIYOR: {company} - {country}")
         
         config = Config()
         analyzer = EnhancedTradeAnalyzer(config)
