@@ -15,7 +15,7 @@ import urllib.parse
 
 app = Flask(__name__)
 
-print("🚀 GELİŞMİŞ CRAWLERLI TİCARET ANALİZ SİSTEMİ BAŞLATILIYOR...")
+print("🚀 OTOMATİK RİSK ANALİZLİ TİCARET SİSTEMİ BAŞLATILIYOR...")
 
 # Logging setup
 logging.basicConfig(
@@ -359,13 +359,14 @@ class SmartTradeAnalyzer:
         self.query_generator = SimpleQueryGenerator()
     
     def smart_analyze(self, company, country):
-        """Akıllı analiz"""
-        logging.info(f"🤖 AKILLI ANALİZ: {company} ↔ {country}")
+        """Akıllı analiz - Ülke ilişkisi varsa YÜKSEK RİSK"""
+        logging.info(f"🤖 OTOMATİK RİSK ANALİZİ: {company} ↔ {country}")
         
         search_queries = self.query_generator.generate_queries(company, country)
         
         all_results = []
         found_urls = set()
+        country_connection_found = False  # Ülke bağlantısı var mı?
         
         for i, query in enumerate(search_queries, 1):
             try:
@@ -401,6 +402,11 @@ class SmartTradeAnalyzer:
                             crawl_result['gtip_codes'] = snippet_analysis['gtip_codes']
                             logging.info(f"🔍 Snippet analizi: Ülke={snippet_analysis['country_found']}, GTIP={snippet_analysis['gtip_codes']}")
                     
+                    # Ülke bağlantısı tespit edildi mi?
+                    if crawl_result['country_found']:
+                        country_connection_found = True
+                        logging.info(f"🚨 ÜLKE BAĞLANTISI TESPİT EDİLDİ: {company} ↔ {country}")
+                    
                     sanctioned_gtips = []
                     if crawl_result['gtip_codes']:
                         sanctioned_gtips = self.eur_lex_checker.quick_check_gtip(crawl_result['gtip_codes'])
@@ -408,7 +414,7 @@ class SmartTradeAnalyzer:
                     confidence = self._calculate_confidence(crawl_result, sanctioned_gtips, result['domain'])
                     
                     analysis = self.create_analysis_result(
-                        company, country, result, crawl_result, sanctioned_gtips, confidence
+                        company, country, result, crawl_result, sanctioned_gtips, confidence, country_connection_found
                     )
                     
                     all_results.append(analysis)
@@ -495,10 +501,16 @@ class SmartTradeAnalyzer:
         
         return min(confidence, 100)
     
-    def create_analysis_result(self, company, country, search_result, crawl_result, sanctioned_gtips, confidence):
-        """Analiz sonucu"""
+    def create_analysis_result(self, company, country, search_result, crawl_result, sanctioned_gtips, confidence, country_connection_found):
+        """Analiz sonucu - Ülke ilişkisi varsa OTOMATİK YÜKSEK RİSK"""
         
-        if sanctioned_gtips:
+        # OTOMATİK RİSK BELİRLEME: Ülke bağlantısı varsa YÜKSEK RİSK
+        if country_connection_found:
+            status = "YÜKSEK_RISK"
+            explanation = f"🚨 YÜKSEK RİSK: {company} şirketinin {country} ile ticaret bağlantısı bulundu"
+            ai_tavsiye = f"🔴 ACİL İNCELEME GEREKİYOR! {company} şirketi {country} ile ticaret yapıyor"
+            risk_level = "YÜKSEK"
+        elif sanctioned_gtips:
             status = "YAPTIRIMLI_YÜKSEK_RISK"
             explanation = f"⛔ YÜKSEK RİSK: {company} şirketi {country} ile yaptırımlı ürün ticareti yapıyor"
             ai_tavsiye = f"⛔ ACİL DURUM! Bu ürünlerin {country.upper()} ihracı YASAKTIR: {', '.join(sanctioned_gtips)}"
@@ -607,7 +619,7 @@ def analyze():
         if not company or not country:
             return jsonify({"error": "Şirket ve ülke bilgisi gereklidir"}), 400
         
-        logging.info(f"🚀 AKILLI ANALİZ BAŞLATILIYOR: {company} - {country}")
+        logging.info(f"🚀 OTOMATİK RİSK ANALİZİ BAŞLATILIYOR: {company} - {country}")
         
         config = Config()
         analyzer = SmartTradeAnalyzer(config)

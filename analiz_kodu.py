@@ -12,7 +12,7 @@ from datetime import datetime
 import cloudscraper
 import urllib.parse
 
-print("🚀 AKILLI CRAWLERLI TİCARET ANALİZ SİSTEMİ")
+print("🚀 OTOMATİK RİSK ANALİZLİ TİCARET SİSTEMİ")
 
 # Logging setup
 logging.basicConfig(
@@ -360,13 +360,14 @@ class SmartTradeAnalyzer:
         self.query_generator = SimpleQueryGenerator()
     
     def smart_analyze(self, company, country):
-        """Akıllı analiz"""
-        print(f"🤖 AKILLI ANALİZ: {company} ↔ {country}")
+        """Akıllı analiz - Ülke ilişkisi varsa OTOMATİK YÜKSEK RİSK"""
+        print(f"🤖 OTOMATİK RİSK ANALİZİ: {company} ↔ {country}")
         
         search_queries = self.query_generator.generate_queries(company, country)
         
         all_results = []
         found_urls = set()
+        country_connection_found = False  # Ülke bağlantısı var mı?
         
         for i, query in enumerate(search_queries, 1):
             try:
@@ -404,6 +405,11 @@ class SmartTradeAnalyzer:
                             crawl_result['gtip_codes'] = snippet_analysis['gtip_codes']
                             print(f"   🔍 Snippet analizi: Ülke={snippet_analysis['country_found']}, GTIP={snippet_analysis['gtip_codes']}")
                     
+                    # Ülke bağlantısı tespit edildi mi?
+                    if crawl_result['country_found']:
+                        country_connection_found = True
+                        print(f"   🚨 ÜLKE BAĞLANTISI TESPİT EDİLDİ: {company} ↔ {country}")
+                    
                     sanctioned_gtips = []
                     if crawl_result['gtip_codes']:
                         sanctioned_gtips = self.eur_lex_checker.quick_check_gtip(crawl_result['gtip_codes'])
@@ -411,7 +417,7 @@ class SmartTradeAnalyzer:
                     confidence = self._calculate_confidence(crawl_result, sanctioned_gtips, result['domain'])
                     
                     analysis = self.create_analysis_result(
-                        company, country, result, crawl_result, sanctioned_gtips, confidence
+                        company, country, result, crawl_result, sanctioned_gtips, confidence, country_connection_found
                     )
                     
                     all_results.append(analysis)
@@ -498,10 +504,16 @@ class SmartTradeAnalyzer:
         
         return min(confidence, 100)
     
-    def create_analysis_result(self, company, country, search_result, crawl_result, sanctioned_gtips, confidence):
-        """Analiz sonucu"""
+    def create_analysis_result(self, company, country, search_result, crawl_result, sanctioned_gtips, confidence, country_connection_found):
+        """Analiz sonucu - Ülke ilişkisi varsa OTOMATİK YÜKSEK RİSK"""
         
-        if sanctioned_gtips:
+        # OTOMATİK RİSK BELİRLEME: Ülke bağlantısı varsa YÜKSEK RİSK
+        if country_connection_found:
+            status = "YÜKSEK_RISK"
+            explanation = f"🚨 YÜKSEK RİSK: {company} şirketinin {country} ile ticaret bağlantısı bulundu"
+            ai_tavsiye = f"🔴 ACİL İNCELEME GEREKİYOR! {company} şirketi {country} ile ticaret yapıyor"
+            risk_level = "YÜKSEK"
+        elif sanctioned_gtips:
             status = "YAPTIRIMLI_YÜKSEK_RISK"
             explanation = f"⛔ YÜKSEK RİSK: {company} şirketi {country} ile yaptırımlı ürün ticareti yapıyor"
             ai_tavsiye = f"⛔ ACİL DURUM! Bu ürünlerin {country.upper()} ihracı YASAKTIR: {', '.join(sanctioned_gtips)}"
@@ -595,7 +607,7 @@ def create_excel_report(results, company, country):
 def display_results(results, company, country):
     """Sonuçları göster"""
     print(f"\n{'='*80}")
-    print(f"📊 AKILLI ANALİZ SONUÇLARI: {company} ↔ {country}")
+    print(f"📊 OTOMATİK RİSK ANALİZ SONUÇLARI: {company} ↔ {country}")
     print(f"{'='*80}")
     
     if not results:
@@ -614,11 +626,11 @@ def display_results(results, company, country):
     print(f"   • ORTA Risk: {medium_risk_count}")
     
     if high_risk_count > 0:
-        print(f"\n⚠️  KRİTİK YAPTIRIM UYARISI:")
+        print(f"\n⚠️  KRİTİK RİSK UYARISI:")
         for result in results:
             if result.get('YAPTIRIM_RISKI') == 'YÜKSEK':
                 print(f"   🔴 {result.get('BAŞLIK', '')[:60]}...")
-                print(f"      Yasaklı GTIP: {result.get('YAPTIRIMLI_GTIPLER', '')}")
+                print(f"      Risk: {result.get('AI_AÇIKLAMA', '')}")
     
     for i, result in enumerate(results, 1):
         print(f"\n🔍 SONUÇ {i}:")
@@ -636,9 +648,9 @@ def display_results(results, company, country):
         print(f"   {'─'*60}")
 
 def main():
-    print("📊 AKILLI CRAWLERLI TİCARET ANALİZ SİSTEMİ")
-    print("🎯 HEDEF: 403 hatalarını aşan akıllı crawler")
-    print("💡 AVANTAJ: Snippet analizi, çift crawler, daha fazla sonuç")
+    print("📊 OTOMATİK RİSK ANALİZLİ TİCARET SİSTEMİ")
+    print("🎯 HEDEF: Ülke bağlantısı varsa otomatik YÜKSEK RİSK")
+    print("💡 AVANTAJ: Rusya bağlantıları otomatik tespit")
     print("🦆 Arama Motoru: DuckDuckGo\n")
     
     config = Config()
@@ -651,10 +663,10 @@ def main():
         print("❌ Şirket ve ülke bilgisi gereklidir!")
         return
     
-    print(f"\n🚀 AKILLI ANALİZ BAŞLATILIYOR: {company} ↔ {country}")
-    print("⏳ Akıllı crawler ile arama yapılıyor...")
-    print("   403 hataları snippet analizi ile aşılıyor...")
-    print("   Daha fazla sonuç bekleniyor...\n")
+    print(f"\n🚀 OTOMATİK RİSK ANALİZİ BAŞLATILIYOR: {company} ↔ {country}")
+    print("⏳ Ülke bağlantıları taranıyor...")
+    print("   YÜKSEK RİSK tespiti aktif...")
+    print("   Acil inceleme gerektiren şirketler işaretleniyor...\n")
     
     start_time = time.time()
     results = analyzer.smart_analyze(company, country)
