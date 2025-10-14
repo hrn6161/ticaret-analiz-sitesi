@@ -285,28 +285,28 @@ class SimpleDuckDuckGoSearcher:
             return ""
 
 class ExactQueryGenerator:
-    """TAM FİRMA ADLI sorgu generator - GELİŞTİRİLMİŞ"""
+    """TAM FİRMA ADLI sorgu generator - TIRNAK YOK"""
     
     @staticmethod
     def generate_queries(company, country):
-        """TAM FİRMA ADI ile 10 sorgu - çeşitlilik artırıldı"""
+        """TAM FİRMA ADI ile 10 sorgu - TIRNAK YOK"""
         
         queries = [
-            # TAM FİRMA ADI ile ülke bağlantılı sorgular
-            f'"{company}" {country} export',
-            f'"{company}" {country} import', 
-            f'"{company}" {country}',
-            f'"{company}" Russia',
-            f'"{company}" {country} trade',
-            f'"{company}" {country} customs',
-            f'"{company}" {country} shipment',
-            f'"{company}" {country} logistics',
-            # SADECE FİRMA ADI ile genel aramalar
-            f'"{company}"',
-            f'{company}'
+            # TAM FİRMA ADI ile ülke bağlantılı sorgular - TIRNAK YOK
+            f"{company} {country} export",
+            f"{company} {country} import", 
+            f"{company} {country}",
+            f"{company} Russia",
+            f"{company} {country} trade",
+            f"{company} {country} customs",
+            f"{company} {country} shipment",
+            f"{company} {country} logistics",
+            # SADECE FİRMA ADI ile genel aramalar - TIRNAK YOK
+            f"{company}",
+            f"{company} company"
         ]
         
-        print(f"   🔍 TAM FİRMA ADI ile {len(queries)} sorgu oluşturuldu")
+        print(f"   🔍 TAM FİRMA ADI ile {len(queries)} sorgu oluşturuldu (TIRNAK YOK)")
         return queries
 
 class QuickEURLexChecker:
@@ -716,6 +716,7 @@ def main():
     print(f"\n🚀 TAM FİRMA ADLI ANALİZ BAŞLATILIYOR: '{company}' ↔ {country}")
     print("⏳ TAM firma adı ile 10 sorgu yapılıyor...")
     print("   Kısaltma YOK, doğru şirket aranıyor...")
+    print("   TIRNAK YOK, normal arama yapılıyor...")
     print("   Snippet analizi öncelikli, daha hızlı sonuç...\n")
     
     start_time = time.time()

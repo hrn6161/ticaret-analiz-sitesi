@@ -25,7 +25,7 @@ logging.basicConfig(
 
 class Config:
     def __init__(self):
-        self.MAX_RESULTS = 15  # Artırıldı
+        self.MAX_RESULTS = 15
         self.REQUEST_TIMEOUT = 30
         self.RETRY_ATTEMPTS = 2
         self.MAX_GTIP_CHECK = 5
@@ -36,6 +36,34 @@ class Config:
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         ]
 
+class ExactQueryGenerator:
+    """TAM FİRMA ADLI sorgu generator - TIRNAK YOK"""
+    
+    @staticmethod
+    def generate_queries(company, country):
+        """TAM FİRMA ADI ile 10 sorgu - TIRNAK YOK"""
+        
+        queries = [
+            # TAM FİRMA ADI ile ülke bağlantılı sorgular - TIRNAK YOK
+            f"{company} {country} export",
+            f"{company} {country} import", 
+            f"{company} {country}",
+            f"{company} Russia",
+            f"{company} {country} trade",
+            f"{company} {country} customs",
+            f"{company} {country} shipment",
+            f"{company} {country} logistics",
+            # SADECE FİRMA ADI ile genel aramalar - TIRNAK YOK
+            f"{company}",
+            f"{company} company"
+        ]
+        
+        logging.info(f"🔍 TAM FİRMA ADI ile {len(queries)} sorgu oluşturuldu (TIRNAK YOK)")
+        return queries
+
+# Diğer class'lar aynı kalacak, sadece query generator değişti
+# ... (SmartCrawler, SimpleDuckDuckGoSearcher, QuickEURLexChecker, SmartTradeAnalyzer class'ları aynı)
+
 class SmartCrawler:
     def __init__(self, config):
         self.config = config
@@ -45,20 +73,16 @@ class SmartCrawler:
         """Akıllı crawl - snippet analizi öncelikli"""
         logging.info(f"🌐 Crawl: {url[:60]}...")
         
-        # ÖNCE SNIPPET ANALİZİ - daha hızlı ve güvenilir
-        time.sleep(0.5)  # Kısa bekleme
+        time.sleep(0.5)
         
-        # Cloudscraper ile dene
         result = self._try_cloudscraper(url, target_country)
         if result['status_code'] == 200:
             return result
         
-        # Normal requests ile dene
         result = self._try_requests(url, target_country)
         if result['status_code'] == 200:
             return result
         
-        # Her ikisi de başarısızsa snippet analizi döndür
         logging.info(f"🔍 Sayfa erişilemiyor, snippet analizi kullanılıyor...")
         return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'BLOCKED'}
     
@@ -83,6 +107,7 @@ class SmartCrawler:
                 return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': response.status_code}
                 
         except Exception as e:
+            logging.error(f"❌ Cloudscraper hatası: {e}")
             return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'ERROR'}
     
     def _try_requests(self, url, target_country):
@@ -102,6 +127,7 @@ class SmartCrawler:
                 return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': response.status_code}
                 
         except Exception as e:
+            logging.error(f"❌ Requests hatası: {e}")
             return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'ERROR'}
     
     def _parse_content(self, html, target_country, status_code):
@@ -127,7 +153,7 @@ class SmartCrawler:
             return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'PARSE_ERROR'}
     
     def _check_country(self, text_lower, target_country):
-        """Ülke kontrolü - daha geniş varyasyonlar"""
+        """Ülke kontrolü"""
         country_variations = [
             target_country.lower(),
             'russia', 'rusya', 'russian', 'rus', 'rossiya',
@@ -141,7 +167,7 @@ class SmartCrawler:
         return False
     
     def extract_gtip_codes(self, text):
-        """GTIP kod çıkarma - geliştirilmiş"""
+        """GTIP kod çıkarma"""
         patterns = [
             r'\b\d{4}\.?\d{0,4}\b',
             r'\b\d{6}\b',
@@ -161,7 +187,7 @@ class SmartCrawler:
                 
                 code = re.sub(r'[^\d]', '', match)
                 if len(code) >= 4 and len(code) <= 8:
-                    all_codes.add(code[:4])  # İlk 4 hane
+                    all_codes.add(code[:4])
         
         return list(all_codes)
 
@@ -172,11 +198,11 @@ class SimpleDuckDuckGoSearcher:
         logging.info("🦆 DuckDuckGo arama motoru hazır!")
     
     def search_simple(self, query, max_results=15):
-        """Basit DuckDuckGo arama - geliştirilmiş"""
+        """Basit DuckDuckGo arama"""
         try:
             logging.info(f"🔍 Arama: {query}")
             
-            time.sleep(random.uniform(2, 4))  # Rastgele bekleme
+            time.sleep(random.uniform(2, 4))
             
             url = "https://html.duckduckgo.com/html/"
             data = {
@@ -210,11 +236,10 @@ class SimpleDuckDuckGoSearcher:
             return []
     
     def _parse_results(self, html, max_results):
-        """Sonuç parsing - geliştirilmiş"""
+        """Sonuç parsing"""
         soup = BeautifulSoup(html, 'html.parser')
         results = []
         
-        # Farklı result class'larını dene
         results_elements = soup.find_all('div', class_=['result', 'result__body', 'web-result'])
         
         for element in results_elements[:max_results]:
@@ -226,7 +251,6 @@ class SimpleDuckDuckGoSearcher:
                 title = title_elem.get_text(strip=True)
                 url = title_elem.get('href')
                 
-                # Redirect çöz
                 if url and ('//duckduckgo.com/l/' in url or url.startswith('/l/')):
                     url = self._resolve_redirect(url)
                     if not url:
@@ -281,38 +305,13 @@ class SimpleDuckDuckGoSearcher:
         except:
             return ""
 
-class ExactQueryGenerator:
-    """TAM FİRMA ADLI sorgu generator - GELİŞTİRİLMİŞ"""
-    
-    @staticmethod
-    def generate_queries(company, country):
-        """TAM FİRMA ADI ile 10 sorgu - çeşitlilik artırıldı"""
-        
-        queries = [
-            # TAM FİRMA ADI ile ülke bağlantılı sorgular
-            f'"{company}" {country} export',
-            f'"{company}" {country} import', 
-            f'"{company}" {country}',
-            f'"{company}" Russia',
-            f'"{company}" {country} trade',
-            f'"{company}" {country} customs',
-            f'"{company}" {country} shipment',
-            f'"{company}" {country} logistics',
-            # SADECE FİRMA ADI ile genel aramalar
-            f'"{company}"',
-            f'{company}'
-        ]
-        
-        logging.info(f"🔍 TAM FİRMA ADI ile {len(queries)} sorgu oluşturuldu")
-        return queries
-
 class QuickEURLexChecker:
     def __init__(self, config):
         self.config = config
         self.sanction_cache = {}
     
     def quick_check_gtip(self, gtip_codes):
-        """GTIP kontrolü - geliştirilmiş"""
+        """GTIP kontrolü"""
         if not gtip_codes:
             return []
             
@@ -330,7 +329,6 @@ class QuickEURLexChecker:
             try:
                 time.sleep(1)
                 
-                # Çoklu arama terimleri
                 search_terms = [
                     f'"{gtip_code}" sanction Russia',
                     f'"{gtip_code}" prohibited Russia', 
@@ -382,7 +380,7 @@ class SmartTradeAnalyzer:
         self.query_generator = ExactQueryGenerator()
     
     def smart_analyze(self, company, country):
-        """Akıllı analiz - TAM FİRMA ADI ile - OPTİMİZE EDİLMİŞ"""
+        """Akıllı analiz - TAM FİRMA ADI ile"""
         logging.info(f"🤖 TAM FİRMA ADLI ANALİZ: '{company}' ↔ {country}")
         
         search_queries = self.query_generator.generate_queries(company, country)
@@ -417,25 +415,20 @@ class SmartTradeAnalyzer:
                     if j > 1:
                         time.sleep(random.uniform(1, 2))
                     
-                    # ÖNCE SNIPPET ANALİZİ - daha hızlı
                     snippet_analysis = self._analyze_snippet(result['full_text'], country, result['url'])
                     
-                    # Sayfa crawl denemesi
                     crawl_result = self.crawler.smart_crawl(result['url'], country)
                     
-                    # Eğer crawl başarısızsa snippet kullan
                     if crawl_result['status_code'] != 200:
                         crawl_result['country_found'] = snippet_analysis['country_found']
                         crawl_result['gtip_codes'] = snippet_analysis['gtip_codes']
                         logging.info(f"🔍 Snippet analizi kullanıldı: Ülke={snippet_analysis['country_found']}, GTIP={snippet_analysis['gtip_codes']}")
                     else:
-                        # Crawl başarılıysa, snippet ile birleştir
                         if snippet_analysis['country_found']:
                             crawl_result['country_found'] = True
                         if snippet_analysis['gtip_codes']:
                             crawl_result['gtip_codes'] = list(set(crawl_result['gtip_codes'] + snippet_analysis['gtip_codes']))
                     
-                    # Ülke bağlantısı tespit edildi mi?
                     if crawl_result['country_found']:
                         country_connection_found = True
                         logging.info(f"🚨 ÜLKE BAĞLANTISI TESPİT EDİLDİ: {company} ↔ {country}")
@@ -452,7 +445,7 @@ class SmartTradeAnalyzer:
                     
                     all_results.append(analysis)
                     
-                    if len(all_results) >= 8:  # Daha fazla sonuç
+                    if len(all_results) >= 8:
                         logging.info("🎯 8 sonuç bulundu, analiz tamamlanıyor...")
                         return all_results
                 
@@ -463,7 +456,7 @@ class SmartTradeAnalyzer:
         return all_results
     
     def _analyze_snippet(self, snippet_text, target_country, url=""):
-        """Snippet analizi - GELİŞTİRİLMİŞ"""
+        """Snippet analizi"""
         domain = self._extract_domain(url)
         combined_text = f"{snippet_text} {domain}".lower()
         
@@ -476,7 +469,7 @@ class SmartTradeAnalyzer:
         }
     
     def _check_country_snippet(self, text_lower, target_country):
-        """Snippet ülke kontrolü - genişletilmiş"""
+        """Snippet ülke kontrolü"""
         country_variations = [
             target_country.lower(),
             'russia', 'rusya', 'russian', 'rus', 'rossiya',
@@ -490,7 +483,7 @@ class SmartTradeAnalyzer:
         return False
     
     def _extract_gtip_snippet(self, text):
-        """Snippet GTIP çıkarma - geliştirilmiş"""
+        """Snippet GTIP çıkarma"""
         patterns = [
             r'\b\d{4}\.?\d{0,4}\b',
             r'\b\d{6}\b',
@@ -522,7 +515,7 @@ class SmartTradeAnalyzer:
             return ""
     
     def _calculate_confidence(self, crawl_result, sanctioned_gtips, domain):
-        """Güven seviyesi - iyileştirilmiş"""
+        """Güven seviyesi"""
         confidence = 0
         
         if crawl_result['country_found']:
@@ -534,7 +527,6 @@ class SmartTradeAnalyzer:
         if sanctioned_gtips:
             confidence += 30
         
-        # Domain güvenilirliği
         trusted_domains = ['eximpedia', 'trademo', 'volza', 'exportgenius', 'comtrade']
         if any(trusted in domain.lower() for trusted in trusted_domains):
             confidence += 20
@@ -542,9 +534,8 @@ class SmartTradeAnalyzer:
         return min(confidence, 100)
     
     def create_analysis_result(self, company, country, search_result, crawl_result, sanctioned_gtips, confidence, country_connection_found):
-        """Analiz sonucu - GELİŞTİRİLMİŞ"""
+        """Analiz sonucu"""
         
-        # OTOMATİK RİSK BELİRLEME
         if country_connection_found and sanctioned_gtips:
             status = "KRİTİK_RİSK"
             explanation = f"🚨 KRİTİK RİSK: {company} şirketi {country} ile YASAKLI ürün ticareti yapıyor"
@@ -594,7 +585,6 @@ class SmartTradeAnalyzer:
             'KAYNAK_TIPI': 'SNIPPET' if crawl_result['status_code'] != 200 else 'FULL_PAGE'
         }
 
-# Kalan kod aynı...
 def create_excel_report(results, company, country):
     """Excel raporu"""
     try:
@@ -650,7 +640,6 @@ def create_excel_report(results, company, country):
         logging.error(f"❌ Excel rapor hatası: {e}")
         return None
 
-# Flask Route'ları aynı...
 @app.route('/')
 def home():
     return render_template('index.html')
