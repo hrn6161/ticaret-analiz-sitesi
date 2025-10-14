@@ -25,44 +25,18 @@ logging.basicConfig(
 
 class Config:
     def __init__(self):
-        self.MAX_RESULTS = 15
+        self.MAX_RESULTS = 10
         self.REQUEST_TIMEOUT = 30
-        self.RETRY_ATTEMPTS = 2
+        self.RETRY_ATTEMPTS = 3
         self.MAX_GTIP_CHECK = 5
         self.USER_AGENTS = [
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/119.0",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
         ]
-
-class ExactQueryGenerator:
-    """TAM FİRMA ADLI sorgu generator - TIRNAK YOK"""
-    
-    @staticmethod
-    def generate_queries(company, country):
-        """TAM FİRMA ADI ile 10 sorgu - TIRNAK YOK"""
-        
-        queries = [
-            # TAM FİRMA ADI ile ülke bağlantılı sorgular - TIRNAK YOK
-            f"{company} {country} export",
-            f"{company} {country} import", 
-            f"{company} {country}",
-            f"{company} Russia",
-            f"{company} {country} trade",
-            f"{company} {country} customs",
-            f"{company} {country} shipment",
-            f"{company} {country} logistics",
-            # SADECE FİRMA ADI ile genel aramalar - TIRNAK YOK
-            f"{company}",
-            f"{company} company"
-        ]
-        
-        logging.info(f"🔍 TAM FİRMA ADI ile {len(queries)} sorgu oluşturuldu (TIRNAK YOK)")
-        return queries
-
-# Diğer class'lar aynı kalacak, sadece query generator değişti
-# ... (SmartCrawler, SimpleDuckDuckGoSearcher, QuickEURLexChecker, SmartTradeAnalyzer class'ları aynı)
 
 class SmartCrawler:
     def __init__(self, config):
@@ -191,79 +165,108 @@ class SmartCrawler:
         
         return list(all_codes)
 
-class SimpleDuckDuckGoSearcher:
+class MultiSearcher:
+    """Çoklu arama motoru desteği"""
+    
     def __init__(self, config):
         self.config = config
         self.scraper = cloudscraper.create_scraper()
-        logging.info("🦆 DuckDuckGo arama motoru hazır!")
+        logging.info("🔍 Çoklu arama motoru hazır!")
     
-    def search_simple(self, query, max_results=15):
-        """Basit DuckDuckGo arama"""
+    def search_all(self, query, max_results=10):
+        """Tüm arama motorlarını dene"""
+        logging.info(f"🔍 Çoklu arama: {query}")
+        
+        # DuckDuckGo ile başla
+        results = self._search_duckduckgo(query, max_results)
+        if results:
+            logging.info(f"✅ DuckDuckGo: {len(results)} sonuç")
+            return results
+        
+        # DuckDuckGo başarısızsa Bing dene
+        logging.info("🔄 DuckDuckGo başarısız, Bing deneniyor...")
+        results = self._search_bing(query, max_results)
+        if results:
+            logging.info(f"✅ Bing: {len(results)} sonuç")
+            return results
+        
+        # Bing de başarısızsa basit Google dene
+        logging.info("🔄 Bing başarısız, basit Google deneniyor...")
+        results = self._search_simple_google(query, max_results)
+        if results:
+            logging.info(f"✅ Google: {len(results)} sonuç")
+            return results
+        
+        logging.info("❌ Tüm arama motorları başarısız")
+        return []
+    
+    def _search_duckduckgo(self, query, max_results):
+        """DuckDuckGo arama - Geliştirilmiş"""
         try:
-            logging.info(f"🔍 Arama: {query}")
+            time.sleep(random.uniform(3, 5))
             
-            time.sleep(random.uniform(2, 4))
-            
-            url = "https://html.duckduckgo.com/html/"
+            # Farklı endpoint dene
+            url = "https://lite.duckduckgo.com/lite/"
             data = {
                 'q': query,
                 'b': '',
-                'kl': 'us-en'
             }
             
             headers = {
                 'User-Agent': random.choice(self.config.USER_AGENTS),
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.5',
-                'Accept-Encoding': 'gzip, deflate',
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'Origin': 'https://html.duckduckgo.com',
-                'Connection': 'keep-alive',
+                'Origin': 'https://lite.duckduckgo.com',
+                'Referer': 'https://lite.duckduckgo.com/',
             }
             
-            response = self.scraper.post(url, data=data, headers=headers, timeout=20)
+            response = self.scraper.post(url, data=data, headers=headers, timeout=15)
             
             if response.status_code == 200:
-                results = self._parse_results(response.text, max_results)
-                logging.info(f"✅ {len(results)} sonuç buldu")
-                return results
+                return self._parse_duckduckgo_results(response.text, max_results)
             else:
-                logging.warning(f"❌ Arama hatası {response.status_code}")
+                logging.warning(f"❌ DuckDuckGo hatası {response.status_code}")
                 return []
                 
         except Exception as e:
-            logging.error(f"❌ Arama hatası: {e}")
+            logging.error(f"❌ DuckDuckGo hatası: {e}")
             return []
     
-    def _parse_results(self, html, max_results):
-        """Sonuç parsing"""
+    def _parse_duckduckgo_results(self, html, max_results):
+        """DuckDuckGo sonuç parsing"""
         soup = BeautifulSoup(html, 'html.parser')
         results = []
         
-        results_elements = soup.find_all('div', class_=['result', 'result__body', 'web-result'])
+        # Lite versiyon için parsing
+        links = soup.find_all('a', href=True)
         
-        for element in results_elements[:max_results]:
+        for link in links[:max_results*2]:
             try:
-                title_elem = element.find('a', class_=['result__a', 'result__url'])
-                if not title_elem:
+                url = link.get('href')
+                title = link.get_text(strip=True)
+                
+                if not url or not title:
                     continue
                     
-                title = title_elem.get_text(strip=True)
-                url = title_elem.get('href')
-                
-                if url and ('//duckduckgo.com/l/' in url or url.startswith('/l/')):
-                    url = self._resolve_redirect(url)
-                    if not url:
-                        continue
-                
-                snippet_elem = element.find(attrs={'class': ['result__snippet', 'result-snippet']})
-                snippet = snippet_elem.get_text(strip=True) if snippet_elem else ""
-                
-                if url and url.startswith('//'):
-                    url = 'https:' + url
-                
-                if not url or not url.startswith('http'):
+                # Spam linkleri filtrele
+                if any(domain in url for domain in ['duckduckgo.com', 'facebook.com', 'twitter.com']):
                     continue
+                
+                # URL'yi temizle
+                if url.startswith('//'):
+                    url = 'https:' + url
+                elif url.startswith('/'):
+                    continue
+                
+                if not url.startswith('http'):
+                    continue
+                
+                # Snippet bul
+                snippet = ""
+                next_elem = link.find_next(['td', 'div'])
+                if next_elem:
+                    snippet = next_elem.get_text(strip=True)
                 
                 results.append({
                     'title': title,
@@ -274,28 +277,153 @@ class SimpleDuckDuckGoSearcher:
                     'search_engine': 'duckduckgo'
                 })
                 
-                logging.info(f"📄 {title[:50]}...")
-                
-            except Exception as e:
+                if len(results) >= max_results:
+                    break
+                    
+            except Exception:
                 continue
         
         return results
     
-    def _resolve_redirect(self, redirect_url):
-        """Redirect çöz"""
+    def _search_bing(self, query, max_results):
+        """Bing arama"""
         try:
-            if redirect_url.startswith('/l/'):
-                redirect_url = 'https://duckduckgo.com' + redirect_url
+            time.sleep(random.uniform(2, 4))
+            
+            url = "https://www.bing.com/search"
+            params = {
+                'q': query,
+                'count': max_results
+            }
             
             headers = {
                 'User-Agent': random.choice(self.config.USER_AGENTS),
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
             }
             
-            response = self.scraper.get(redirect_url, headers=headers, timeout=5, allow_redirects=True)
-            return response.url
+            response = self.scraper.get(url, params=params, headers=headers, timeout=15)
             
-        except Exception:
-            return None
+            if response.status_code == 200:
+                return self._parse_bing_results(response.text, max_results)
+            else:
+                logging.warning(f"❌ Bing hatası {response.status_code}")
+                return []
+                
+        except Exception as e:
+            logging.error(f"❌ Bing hatası: {e}")
+            return []
+    
+    def _parse_bing_results(self, html, max_results):
+        """Bing sonuç parsing"""
+        soup = BeautifulSoup(html, 'html.parser')
+        results = []
+        
+        results_elements = soup.find_all('li', class_='b_algo')
+        
+        for element in results_elements[:max_results]:
+            try:
+                title_elem = element.find('h2')
+                if not title_elem:
+                    continue
+                    
+                title = title_elem.get_text(strip=True)
+                
+                link_elem = title_elem.find('a')
+                if not link_elem:
+                    continue
+                    
+                url = link_elem.get('href')
+                
+                snippet_elem = element.find('p')
+                snippet = snippet_elem.get_text(strip=True) if snippet_elem else ""
+                
+                if not url or not url.startswith('http'):
+                    continue
+                
+                results.append({
+                    'title': title,
+                    'url': url,
+                    'snippet': snippet,
+                    'full_text': f"{title} {snippet}",
+                    'domain': self._extract_domain(url),
+                    'search_engine': 'bing'
+                })
+                
+            except Exception:
+                continue
+        
+        return results
+    
+    def _search_simple_google(self, query, max_results):
+        """Basit Google arama"""
+        try:
+            time.sleep(random.uniform(2, 4))
+            
+            url = "https://www.google.com/search"
+            params = {
+                'q': query,
+                'num': max_results
+            }
+            
+            headers = {
+                'User-Agent': random.choice(self.config.USER_AGENTS),
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+            }
+            
+            response = self.scraper.get(url, params=params, headers=headers, timeout=15)
+            
+            if response.status_code == 200:
+                return self._parse_google_results(response.text, max_results)
+            else:
+                logging.warning(f"❌ Google hatası {response.status_code}")
+                return []
+                
+        except Exception as e:
+            logging.error(f"❌ Google hatası: {e}")
+            return []
+    
+    def _parse_google_results(self, html, max_results):
+        """Google sonuç parsing"""
+        soup = BeautifulSoup(html, 'html.parser')
+        results = []
+        
+        results_elements = soup.find_all('div', class_='g')
+        
+        for element in results_elements[:max_results]:
+            try:
+                title_elem = element.find('h3')
+                if not title_elem:
+                    continue
+                    
+                title = title_elem.get_text(strip=True)
+                
+                link_elem = element.find('a')
+                if not link_elem:
+                    continue
+                    
+                url = link_elem.get('href')
+                
+                snippet_elem = element.find('span')
+                snippet = snippet_elem.get_text(strip=True) if snippet_elem else ""
+                
+                if not url or not url.startswith('http'):
+                    continue
+                
+                results.append({
+                    'title': title,
+                    'url': url,
+                    'snippet': snippet,
+                    'full_text': f"{title} {snippet}",
+                    'domain': self._extract_domain(url),
+                    'search_engine': 'google'
+                })
+                
+            except Exception:
+                continue
+        
+        return results
     
     def _extract_domain(self, url):
         """Domain çıkar"""
@@ -304,6 +432,28 @@ class SimpleDuckDuckGoSearcher:
             return urlparse(url).netloc
         except:
             return ""
+
+class ExactQueryGenerator:
+    """TAM FİRMA ADLI sorgu generator"""
+    
+    @staticmethod
+    def generate_queries(company, country):
+        """TAM FİRMA ADI ile 7 sorgu - optimize edilmiş"""
+        
+        queries = [
+            # En önemli sorgular
+            f"{company} {country}",
+            f"{company} Russia",
+            f"{company} {country} export",
+            f"{company} {country} import",
+            # Basit sorgular
+            f"{company}",
+            f"{company} trade",
+            f"{company} customs"
+        ]
+        
+        logging.info(f"🔍 {len(queries)} optimize sorgu oluşturuldu")
+        return queries
 
 class QuickEURLexChecker:
     def __init__(self, config):
@@ -332,8 +482,6 @@ class QuickEURLexChecker:
                 search_terms = [
                     f'"{gtip_code}" sanction Russia',
                     f'"{gtip_code}" prohibited Russia', 
-                    f'"{gtip_code}" ban Russia',
-                    f'HS code {gtip_code} Russia sanction'
                 ]
                 
                 for search_term in search_terms:
@@ -374,13 +522,13 @@ class QuickEURLexChecker:
 class SmartTradeAnalyzer:
     def __init__(self, config):
         self.config = config
-        self.searcher = SimpleDuckDuckGoSearcher(config)
+        self.searcher = MultiSearcher(config)
         self.crawler = SmartCrawler(config)
         self.eur_lex_checker = QuickEURLexChecker(config)
         self.query_generator = ExactQueryGenerator()
     
     def smart_analyze(self, company, country):
-        """Akıllı analiz - TAM FİRMA ADI ile"""
+        """Akıllı analiz - Çoklu arama motorlu"""
         logging.info(f"🤖 TAM FİRMA ADLI ANALİZ: '{company}' ↔ {country}")
         
         search_queries = self.query_generator.generate_queries(company, country)
@@ -394,11 +542,11 @@ class SmartTradeAnalyzer:
                 logging.info(f"🔍 Sorgu {i}/{len(search_queries)}: {query}")
                 
                 if i > 1:
-                    wait_time = random.uniform(3, 6)
+                    wait_time = random.uniform(4, 7)  # Daha uzun bekleme
                     logging.info(f"⏳ {wait_time:.1f}s bekleme...")
                     time.sleep(wait_time)
                 
-                search_results = self.searcher.search_simple(query, self.config.MAX_RESULTS)
+                search_results = self.searcher.search_all(query, self.config.MAX_RESULTS)
                 
                 if not search_results:
                     logging.warning(f"⚠️ Sonuç bulunamadı: {query}")
@@ -410,10 +558,10 @@ class SmartTradeAnalyzer:
                     
                     found_urls.add(result['url'])
                     
-                    logging.info(f"📄 Sonuç {j}: {result['title'][:40]}...")
+                    logging.info(f"📄 Sonuç {j}: {result['title'][:40]}... ({result['search_engine']})")
                     
                     if j > 1:
-                        time.sleep(random.uniform(1, 2))
+                        time.sleep(random.uniform(1, 3))
                     
                     snippet_analysis = self._analyze_snippet(result['full_text'], country, result['url'])
                     
@@ -422,7 +570,7 @@ class SmartTradeAnalyzer:
                     if crawl_result['status_code'] != 200:
                         crawl_result['country_found'] = snippet_analysis['country_found']
                         crawl_result['gtip_codes'] = snippet_analysis['gtip_codes']
-                        logging.info(f"🔍 Snippet analizi kullanıldı: Ülke={snippet_analysis['country_found']}, GTIP={snippet_analysis['gtip_codes']}")
+                        logging.info(f"🔍 Snippet analizi: Ülke={snippet_analysis['country_found']}, GTIP={snippet_analysis['gtip_codes']}")
                     else:
                         if snippet_analysis['country_found']:
                             crawl_result['country_found'] = True
@@ -445,8 +593,8 @@ class SmartTradeAnalyzer:
                     
                     all_results.append(analysis)
                     
-                    if len(all_results) >= 8:
-                        logging.info("🎯 8 sonuç bulundu, analiz tamamlanıyor...")
+                    if len(all_results) >= 5:
+                        logging.info("🎯 5 sonuç bulundu, analiz tamamlanıyor...")
                         return all_results
                 
             except Exception as e:
@@ -581,7 +729,7 @@ class SmartTradeAnalyzer:
             'URL': search_result['url'],
             'ÖZET': search_result['snippet'],
             'GÜVEN_SEVİYESİ': f"%{confidence}",
-            'ARAMA_MOTORU': 'duckduckgo',
+            'ARAMA_MOTORU': search_result['search_engine'],
             'KAYNAK_TIPI': 'SNIPPET' if crawl_result['status_code'] != 200 else 'FULL_PAGE'
         }
 
@@ -598,7 +746,7 @@ def create_excel_report(results, company, country):
         headers = [
             'ŞİRKET', 'ÜLKE', 'DURUM', 'YAPTIRIM_RISKI', 'ULKE_BAGLANTISI',
             'TESPIT_EDILEN_GTIPLER', 'YAPTIRIMLI_GTIPLER', 'GÜVEN_SEVİYESİ',
-            'AI_AÇIKLAMA', 'AI_TAVSIYE', 'BAŞLIK', 'URL', 'KAYNAK_TIPI'
+            'AI_AÇIKLAMA', 'AI_TAVSIYE', 'BAŞLIK', 'URL', 'KAYNAK_TIPI', 'ARAMA_MOTORU'
         ]
         
         for col, header in enumerate(headers, 1):
@@ -619,6 +767,7 @@ def create_excel_report(results, company, country):
             ws1.cell(row=row, column=11, value=str(result.get('BAŞLIK', '')))
             ws1.cell(row=row, column=12, value=str(result.get('URL', '')))
             ws1.cell(row=row, column=13, value=str(result.get('KAYNAK_TIPI', '')))
+            ws1.cell(row=row, column=14, value=str(result.get('ARAMA_MOTORU', '')))
         
         for column in ws1.columns:
             max_length = 0
