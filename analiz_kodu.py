@@ -12,7 +12,7 @@ from datetime import datetime
 import cloudscraper
 import urllib.parse
 
-print("🚀 OTOMATİK RİSK ANALİZLİ TİCARET SİSTEMİ")
+print("🚀 TAM FİRMA ADLI OTOMATİK RİSK ANALİZ SİSTEMİ")
 
 # Logging setup
 logging.basicConfig(
@@ -273,25 +273,26 @@ class SimpleDuckDuckGoSearcher:
         except:
             return ""
 
-class SimpleQueryGenerator:
-    """Basit sorgu generator"""
+class ExactQueryGenerator:
+    """TAM FİRMA ADLI sorgu generator"""
     
     @staticmethod
     def generate_queries(company, country):
-        """Sadece 5-6 önemli sorgu"""
-        
-        simple_company = ' '.join(company.split()[:2])
+        """TAM FİRMA ADI ile 7 sorgu"""
         
         queries = [
-            f"{simple_company} {country} export",
-            f"{simple_company} {country} import", 
-            f"{simple_company} Russia",
-            f"{simple_company} trade",
+            # TAM FİRMA ADI ile ülke bağlantılı sorgular
+            f"{company} {country} export",
+            f"{company} {country} import", 
             f"{company} {country}",
-            f"{simple_company} customs",
+            f"{company} Russia",
+            f"{company} trade",
+            f"{company} customs",
+            # SADECE FİRMA ADI (7. sorgu)
+            f"{company}"
         ]
         
-        print(f"   🔍 {len(queries)} sorgu: {queries}")
+        print(f"   🔍 TAM FİRMA ADI ile {len(queries)} sorgu: {queries}")
         return queries
 
 class QuickEURLexChecker:
@@ -357,11 +358,11 @@ class SmartTradeAnalyzer:
         self.searcher = SimpleDuckDuckGoSearcher(config)
         self.crawler = SmartCrawler(config)
         self.eur_lex_checker = QuickEURLexChecker(config)
-        self.query_generator = SimpleQueryGenerator()
+        self.query_generator = ExactQueryGenerator()
     
     def smart_analyze(self, company, country):
-        """Akıllı analiz - Ülke ilişkisi varsa OTOMATİK YÜKSEK RİSK"""
-        print(f"🤖 OTOMATİK RİSK ANALİZİ: {company} ↔ {country}")
+        """Akıllı analiz - TAM FİRMA ADI ile"""
+        print(f"🤖 TAM FİRMA ADLI ANALİZ: '{company}' ↔ {country}")
         
         search_queries = self.query_generator.generate_queries(company, country)
         
@@ -607,7 +608,7 @@ def create_excel_report(results, company, country):
 def display_results(results, company, country):
     """Sonuçları göster"""
     print(f"\n{'='*80}")
-    print(f"📊 OTOMATİK RİSK ANALİZ SONUÇLARI: {company} ↔ {country}")
+    print(f"📊 TAM FİRMA ADLI ANALİZ SONUÇLARI: '{company}' ↔ {country}")
     print(f"{'='*80}")
     
     if not results:
@@ -648,25 +649,25 @@ def display_results(results, company, country):
         print(f"   {'─'*60}")
 
 def main():
-    print("📊 OTOMATİK RİSK ANALİZLİ TİCARET SİSTEMİ")
-    print("🎯 HEDEF: Ülke bağlantısı varsa otomatik YÜKSEK RİSK")
-    print("💡 AVANTAJ: Rusya bağlantıları otomatik tespit")
+    print("📊 TAM FİRMA ADLI OTOMATİK RİSK ANALİZ SİSTEMİ")
+    print("🎯 HEDEF: TAM firma adı ile doğru sonuçlar")
+    print("💡 AVANTAJ: Kısaltma YOK, 7 sorgu, sadece firma adı araması")
     print("🦆 Arama Motoru: DuckDuckGo\n")
     
     config = Config()
     analyzer = SmartTradeAnalyzer(config)
     
-    company = input("Şirket adını girin: ").strip()
+    company = input("Şirket adını girin (TAM İSİM): ").strip()
     country = input("Ülke adını girin: ").strip()
     
     if not company or not country:
         print("❌ Şirket ve ülke bilgisi gereklidir!")
         return
     
-    print(f"\n🚀 OTOMATİK RİSK ANALİZİ BAŞLATILIYOR: {company} ↔ {country}")
-    print("⏳ Ülke bağlantıları taranıyor...")
-    print("   YÜKSEK RİSK tespiti aktif...")
-    print("   Acil inceleme gerektiren şirketler işaretleniyor...\n")
+    print(f"\n🚀 TAM FİRMA ADLI ANALİZ BAŞLATILIYOR: '{company}' ↔ {country}")
+    print("⏳ TAM firma adı ile 7 sorgu yapılıyor...")
+    print("   Kısaltma YOK, doğru şirket aranıyor...")
+    print("   Sadece firma adı araması da yapılıyor...\n")
     
     start_time = time.time()
     results = analyzer.smart_analyze(company, country)

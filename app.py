@@ -15,7 +15,7 @@ import urllib.parse
 
 app = Flask(__name__)
 
-print("🚀 OTOMATİK RİSK ANALİZLİ TİCARET SİSTEMİ BAŞLATILIYOR...")
+print("🚀 TAM FİRMA ADLI OTOMATİK RİSK ANALİZ SİSTEMİ BAŞLATILIYOR...")
 
 # Logging setup
 logging.basicConfig(
@@ -272,25 +272,26 @@ class SimpleDuckDuckGoSearcher:
         except:
             return ""
 
-class SimpleQueryGenerator:
-    """Basit sorgu generator"""
+class ExactQueryGenerator:
+    """TAM FİRMA ADLI sorgu generator"""
     
     @staticmethod
     def generate_queries(company, country):
-        """Sadece 5-6 önemli sorgu"""
-        
-        simple_company = ' '.join(company.split()[:2])
+        """TAM FİRMA ADI ile 7 sorgu"""
         
         queries = [
-            f"{simple_company} {country} export",
-            f"{simple_company} {country} import", 
-            f"{simple_company} Russia",
-            f"{simple_company} trade",
+            # TAM FİRMA ADI ile ülke bağlantılı sorgular
+            f"{company} {country} export",
+            f"{company} {country} import", 
             f"{company} {country}",
-            f"{simple_company} customs",
+            f"{company} Russia",
+            f"{company} trade",
+            f"{company} customs",
+            # SADECE FİRMA ADI (7. sorgu)
+            f"{company}"
         ]
         
-        logging.info(f"🔍 {len(queries)} sorgu: {queries}")
+        logging.info(f"🔍 TAM FİRMA ADI ile {len(queries)} sorgu: {queries}")
         return queries
 
 class QuickEURLexChecker:
@@ -356,11 +357,11 @@ class SmartTradeAnalyzer:
         self.searcher = SimpleDuckDuckGoSearcher(config)
         self.crawler = SmartCrawler(config)
         self.eur_lex_checker = QuickEURLexChecker(config)
-        self.query_generator = SimpleQueryGenerator()
+        self.query_generator = ExactQueryGenerator()
     
     def smart_analyze(self, company, country):
-        """Akıllı analiz - Ülke ilişkisi varsa YÜKSEK RİSK"""
-        logging.info(f"🤖 OTOMATİK RİSK ANALİZİ: {company} ↔ {country}")
+        """Akıllı analiz - TAM FİRMA ADI ile"""
+        logging.info(f"🤖 TAM FİRMA ADLI ANALİZ: '{company}' ↔ {country}")
         
         search_queries = self.query_generator.generate_queries(company, country)
         
@@ -619,7 +620,7 @@ def analyze():
         if not company or not country:
             return jsonify({"error": "Şirket ve ülke bilgisi gereklidir"}), 400
         
-        logging.info(f"🚀 OTOMATİK RİSK ANALİZİ BAŞLATILIYOR: {company} - {country}")
+        logging.info(f"🚀 TAM FİRMA ADLI ANALİZ BAŞLATILIYOR: '{company}' - {country}")
         
         config = Config()
         analyzer = SmartTradeAnalyzer(config)
