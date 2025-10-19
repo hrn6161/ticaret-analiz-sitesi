@@ -44,7 +44,6 @@ class SmartCrawler:
         """Akıllı crawl - sadece ticari siteler"""
         print(f"   🌐 Crawl: {url[:60]}...")
         
-        # Önce domain kontrolü - sadece ticari siteler
         if not self._is_commercial_domain(url):
             print(f"   🔍 Ticari olmayan site atlandı: {url}")
             return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'NON_COMMERCIAL'}
@@ -59,11 +58,11 @@ class SmartCrawler:
         if result['status_code'] == 200:
             return result
         
-        print(f"   🔍 Sayfa erişilemiyor, snippet analizi kullanılıyor...")
+        print(f"   🔍 Sayfa erişilemiyor")
         return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'BLOCKED'}
     
     def _is_commercial_domain(self, url):
-        """Sadece ticari ve ticaret sitelerine izin ver"""
+        """Sadece ticari siteler"""
         commercial_domains = [
             'eximpedia', 'trademo', 'volza', 'exportgenius', 'comtrade',
             'alibaba', 'tradeindia', 'indiamart', 'go4worldbusiness',
@@ -81,11 +80,9 @@ class SmartCrawler:
         
         domain = url.lower()
         
-        # Spam domain'leri engelle
         if any(spam in domain for spam in spam_domains):
             return False
         
-        # Ticari domain'leri kabul et
         if any(commercial in domain for commercial in commercial_domains):
             return True
         
@@ -132,7 +129,7 @@ class SmartCrawler:
             return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'ERROR'}
     
     def _parse_content(self, html, target_country, status_code):
-        """İçerik analizi - geliştirilmiş"""
+        """İçerik analizi"""
         try:
             soup = BeautifulSoup(html, 'html.parser')
             text_content = soup.get_text()
@@ -154,7 +151,7 @@ class SmartCrawler:
             return {'country_found': False, 'gtip_codes': [], 'content_preview': '', 'status_code': 'PARSE_ERROR'}
     
     def _check_country(self, text_lower, target_country):
-        """Ülke kontrolü - daha spesifik"""
+        """Ülke kontrolü"""
         country_variations = {
             'russia': ['russia', 'rusya', 'russian', 'rus', 'rossiya', 'rf'],
             'china': ['china', 'çin', 'chinese'],
@@ -170,10 +167,9 @@ class SmartCrawler:
         return False
     
     def extract_gtip_codes(self, text):
-        """GTIP kod çıkarma - daha doğru"""
-        # Sadece gerçek GTIP formatları
+        """GTIP kod çıkarma"""
         patterns = [
-            r'\b\d{4}\.\d{2}\b',  # 8708.29 gibi
+            r'\b\d{4}\.\d{2}\b',
             r'\bGTIP[: ]*(\d{4}\.?\d{0,4})\b',
             r'\bHS[: ]*CODE[: ]*(\d{4}\.?\d{0,4})\b',
             r'\bH\.S\. Code[: ]*(\d{4}\.?\d{0,4})\b',
@@ -188,52 +184,58 @@ class SmartCrawler:
                     match = match[0]
                 
                 code = re.sub(r'[^\d]', '', match)
-                # Sadece 4-8 haneli ve anlamlı GTIP'ler
                 if len(code) >= 4 and len(code) <= 8:
-                    # Yılları filtrele (2023, 2024, 2025 gibi)
                     if not self._is_year(code):
-                        all_codes.add(code[:4])  # İlk 4 hane
+                        all_codes.add(code[:4])
         
         return list(all_codes)
     
     def _is_year(self, code):
-        """Yıl olup olmadığını kontrol et"""
+        """Yıl kontrolü"""
         if len(code) == 4:
             year = int(code)
-            # 1900-2030 arası yılları filtrele
             if 1900 <= year <= 2030:
                 return True
         return False
 
 class QualitySearcher:
-    """Kaliteli arama - sadece ticari sonuçlar"""
+    """Çoklu arama motoru"""
     
     def __init__(self, config):
         self.config = config
         self.scraper = cloudscraper.create_scraper()
-        print("   🔍 KALİTELİ ARAMA MOTORU HAZIR!")
+        print("   🔍 ÇOKLU ARAMA MOTORU HAZIR!")
     
     def search_quality(self, query, max_results=8):
-        """Sadece kaliteli, ticari sonuçları ara"""
-        print(f"   🔍 Kaliteli arama: {query}")
+        """Çoklu arama"""
+        print(f"   🔍 Arama: {query}")
         
         time.sleep(2)
         
-        # DuckDuckGo Lite ile başla
         results = self._search_duckduckgo_lite(query, max_results)
         if results:
-            print(f"   ✅ DuckDuckGo: {len(results)} kaliteli sonuç")
+            print(f"   ✅ DuckDuckGo: {len(results)} sonuç")
             return results
         
-        print("   ❌ Kaliteli sonuç bulunamadı")
+        results = self._search_yandex(query, max_results)
+        if results:
+            print(f"   ✅ Yandex: {len(results)} sonuç")
+            return results
+        
+        results = self._search_generic(query, max_results)
+        if results:
+            print(f"   ✅ Generic: {len(results)} sonuç")
+            return results
+        
+        print("   ❌ Arama sonucu bulunamadı")
         return []
     
     def _search_duckduckgo_lite(self, query, max_results):
-        """DuckDuckGo Lite - daha temiz sonuçlar"""
+        """DuckDuckGo Lite"""
         try:
             url = "https://lite.duckduckgo.com/lite/"
             data = {
-                'q': f"{query} site:eximpedia.app OR site:trademo.com OR site:volza.com OR site:exportgenius.in",
+                'q': query,
                 'b': '',
             }
             
@@ -246,7 +248,7 @@ class QualitySearcher:
             response = self.scraper.post(url, data=data, headers=headers, timeout=15)
             
             if response.status_code == 200:
-                return self._parse_quality_results(response.text, max_results)
+                return self._parse_duckduckgo_results(response.text, max_results)
             else:
                 print(f"   ❌ DuckDuckGo hatası {response.status_code}")
                 return []
@@ -255,12 +257,71 @@ class QualitySearcher:
             print(f"   ❌ DuckDuckGo hatası: {e}")
             return []
     
-    def _parse_quality_results(self, html, max_results):
-        """Kaliteli sonuçları parse et"""
+    def _search_yandex(self, query, max_results):
+        """Yandex arama"""
+        try:
+            url = "https://yandex.com/search/"
+            params = {
+                'text': f'{query} site:eximpedia.app OR site:trademo.com'
+            }
+            
+            headers = {
+                'User-Agent': random.choice(self.config.USER_AGENTS),
+            }
+            
+            response = self.scraper.get(url, params=params, headers=headers, timeout=15)
+            
+            if response.status_code == 200:
+                return self._parse_yandex_results(response.text, max_results)
+            else:
+                print(f"   ❌ Yandex hatası {response.status_code}")
+                return []
+                
+        except Exception as e:
+            print(f"   ❌ Yandex hatası: {e}")
+            return []
+    
+    def _search_generic(self, query, max_results):
+        """Genel arama"""
+        try:
+            trade_sites = [
+                'https://eximpedia.app/search?q=',
+                'https://trademo.com/search?query=',
+            ]
+            
+            all_results = []
+            
+            for site in trade_sites:
+                try:
+                    search_url = site + urllib.parse.quote(query)
+                    headers = {
+                        'User-Agent': random.choice(self.config.USER_AGENTS),
+                    }
+                    
+                    response = self.scraper.get(search_url, headers=headers, timeout=10)
+                    
+                    if response.status_code == 200:
+                        site_results = self._parse_trade_site_results(response.text, search_url, max_results)
+                        all_results.extend(site_results)
+                        
+                        if len(all_results) >= max_results:
+                            break
+                            
+                except Exception as e:
+                    print(f"   ❌ Site arama hatası {site}: {e}")
+                    continue
+            
+            return all_results[:max_results]
+                
+        except Exception as e:
+            print(f"   ❌ Generic arama hatası: {e}")
+            return []
+    
+    def _parse_duckduckgo_results(self, html, max_results):
+        """DuckDuckGo sonuçları"""
         soup = BeautifulSoup(html, 'html.parser')
         results = []
         
-        # DuckDuckGo Lite formatı
         rows = soup.find_all('tr')
         
         for i in range(0, len(rows)-1, 3):
@@ -268,7 +329,6 @@ class QualitySearcher:
                 break
                 
             try:
-                # Başlık satırı
                 title_row = rows[i]
                 link_elem = title_row.find('a', href=True)
                 if not link_elem:
@@ -277,11 +337,9 @@ class QualitySearcher:
                 title = link_elem.get_text(strip=True)
                 url = link_elem.get('href')
                 
-                # URL kontrolü
                 if not url or not self._is_quality_url(url):
                     continue
                 
-                # Snippet satırı
                 snippet_row = rows[i+1] if i+1 < len(rows) else None
                 snippet = ""
                 if snippet_row:
@@ -298,7 +356,84 @@ class QualitySearcher:
                     'search_engine': 'duckduckgo'
                 })
                 
-                print(f"   📄 Kaliteli sonuç: {title[:50]}...")
+            except Exception as e:
+                continue
+        
+        return results
+    
+    def _parse_yandex_results(self, html, max_results):
+        """Yandex sonuçları"""
+        soup = BeautifulSoup(html, 'html.parser')
+        results = []
+        
+        result_blocks = soup.find_all('li', class_='serp-item') or soup.find_all('div', class_='organic')
+        
+        for block in result_blocks:
+            if len(results) >= max_results:
+                break
+                
+            try:
+                link_elem = block.find('a', href=True)
+                if not link_elem:
+                    continue
+                    
+                title = link_elem.get_text(strip=True)
+                url = link_elem.get('href')
+                
+                if not url or not self._is_quality_url(url):
+                    continue
+                
+                snippet_elem = block.find('div', class_='text-container') or block.find('div', class_='organic__text')
+                snippet = snippet_elem.get_text(strip=True) if snippet_elem else ""
+                
+                results.append({
+                    'title': title,
+                    'url': url,
+                    'snippet': snippet,
+                    'full_text': f"{title} {snippet}",
+                    'domain': self._extract_domain(url),
+                    'search_engine': 'yandex'
+                })
+                
+            except Exception as e:
+                continue
+        
+        return results
+    
+    def _parse_trade_site_results(self, html, search_url, max_results):
+        """Ticaret sitesi sonuçları"""
+        soup = BeautifulSoup(html, 'html.parser')
+        results = []
+        
+        links = soup.find_all('a', href=True)
+        
+        for link in links:
+            if len(results) >= max_results:
+                break
+                
+            try:
+                title = link.get_text(strip=True)
+                url = link.get('href')
+                
+                if not title or len(title) < 10:
+                    continue
+                    
+                if url.startswith('/'):
+                    from urllib.parse import urlparse
+                    base_url = urlparse(search_url).scheme + '://' + urlparse(search_url).netloc
+                    url = base_url + url
+                
+                if not self._is_quality_url(url):
+                    continue
+                
+                results.append({
+                    'title': title,
+                    'url': url,
+                    'snippet': f"Trade site result for {title}",
+                    'full_text': title,
+                    'domain': self._extract_domain(url),
+                    'search_engine': 'trade_site'
+                })
                 
             except Exception as e:
                 continue
@@ -306,10 +441,11 @@ class QualitySearcher:
         return results
     
     def _is_quality_url(self, url):
-        """Sadece kaliteli ticaret URL'lerini kabul et"""
+        """Kaliteli URL kontrolü"""
         quality_domains = [
             'eximpedia.app', 'trademo.com', 'volza.com', 'exportgenius.in',
-            'comtrade.un.org', 'alibaba.com', 'tradeindia.com'
+            'comtrade.un.org', 'alibaba.com', 'tradeindia.com',
+            'kompass.com', 'go4worldbusiness.com'
         ]
         
         domain = self._extract_domain(url)
@@ -324,23 +460,23 @@ class QualitySearcher:
             return ""
 
 class ExactQueryGenerator:
-    """TAM FİRMA ADLI sorgu generator"""
+    """Sorgu generator"""
     
     @staticmethod
     def generate_queries(company, country):
-        """TAM FİRMA ADI ile 5 kaliteli sorgu"""
+        """Sorgular oluştur"""
         
         queries = [
-            # En spesifik sorgular
             f'"{company}" {country} export',
             f'"{company}" {country} import',
             f'"{company}" {country}',
-            # Genel ticaret sorguları
             f'"{company}" trade',
-            f'"{company}" customs'
+            f'"{company}" customs',
+            f'{company} {country} supplier',
+            f'{company} {country} manufacturer'
         ]
         
-        print(f"   🔍 {len(queries)} KALİTELİ sorgu oluşturuldu")
+        print(f"   🔍 {len(queries)} sorgu oluşturuldu")
         return queries
 
 class QuickEURLexChecker:
@@ -349,7 +485,7 @@ class QuickEURLexChecker:
         self.sanction_cache = {}
     
     def quick_check_gtip(self, gtip_codes):
-        """GTIP kontrolü - sadece gerçek GTIP'ler"""
+        """GTIP kontrolü"""
         if not gtip_codes:
             return []
             
@@ -367,7 +503,6 @@ class QuickEURLexChecker:
             try:
                 time.sleep(1)
                 
-                # Sadece Rusya için kontrol et
                 url = "https://eur-lex.europa.eu/search.html"
                 params = {
                     'text': f'"{gtip_code}" Russia sanction',
@@ -410,7 +545,7 @@ class SmartTradeAnalyzer:
         self.query_generator = ExactQueryGenerator()
     
     def smart_analyze(self, company, country):
-        """AKILLI ANALİZ - sadece kaliteli sonuçlar"""
+        """AKILLI ANALİZ"""
         print(f"🤖 AKILLI ANALİZ: '{company}' ↔ {country}")
         
         search_queries = self.query_generator.generate_queries(company, country)
@@ -424,12 +559,12 @@ class SmartTradeAnalyzer:
                 print(f"\n🔍 Sorgu {i}/{len(search_queries)}: {query}")
                 
                 if i > 1:
-                    time.sleep(3)  # Kısa bekleme
+                    time.sleep(2)
                 
                 search_results = self.searcher.search_quality(query, self.config.MAX_RESULTS)
                 
                 if not search_results:
-                    print(f"   ⚠️ Kaliteli sonuç bulunamadı: {query}")
+                    print(f"   ⚠️ Sonuç bulunamadı: {query}")
                     continue
                 
                 for j, result in enumerate(search_results, 1):
@@ -438,27 +573,20 @@ class SmartTradeAnalyzer:
                     
                     found_urls.add(result['url'])
                     
-                    print(f"   📄 Kaliteli sonuç {j}: {result['title'][:50]}...")
+                    print(f"   📄 Sonuç {j}: {result['title'][:50]}...")
                     
                     if j > 1:
                         time.sleep(1)
                     
-                    # Snippet analizi
-                    snippet_analysis = self._analyze_snippet(result['full_text'], country, result['url'])
-                    
-                    # Sayfa analizi
                     crawl_result = self.crawler.smart_crawl(result['url'], country)
                     
-                    # Eğer sayfa ticari değilse atla
                     if crawl_result['status_code'] == 'NON_COMMERCIAL':
                         continue
                     
-                    # Ülke bağlantısı kontrolü
                     if crawl_result['country_found']:
                         country_connection_found = True
-                        print(f"   🚨 ÜLKE BAĞLANTISI TESPİT EDİLDİ: {company} ↔ {country}")
+                        print(f"   🚨 ÜLKE BAĞLANTISI: {company} ↔ {country}")
                     
-                    # GTIP kontrolü
                     sanctioned_gtips = []
                     if crawl_result['gtip_codes']:
                         sanctioned_gtips = self.eur_lex_checker.quick_check_gtip(crawl_result['gtip_codes'])
@@ -471,8 +599,8 @@ class SmartTradeAnalyzer:
                     
                     all_results.append(analysis)
                     
-                    if len(all_results) >= 3:  # Sadece en iyi 3 sonuç
-                        print("   🎯 3 kaliteli sonuç bulundu, analiz tamamlanıyor...")
+                    if len(all_results) >= 3:
+                        print("   🎯 3 sonuç bulundu")
                         return all_results
                 
             except Exception as e:
@@ -480,77 +608,6 @@ class SmartTradeAnalyzer:
                 continue
         
         return all_results
-    
-    def _analyze_snippet(self, snippet_text, target_country, url=""):
-        """Snippet analizi"""
-        domain = self._extract_domain(url)
-        combined_text = f"{snippet_text} {domain}".lower()
-        
-        country_found = self._check_country_snippet(combined_text, target_country)
-        gtip_codes = self._extract_gtip_snippet(snippet_text)
-        
-        return {
-            'country_found': country_found,
-            'gtip_codes': gtip_codes
-        }
-    
-    def _check_country_snippet(self, text_lower, target_country):
-        """Snippet ülke kontrolü"""
-        country_variations = {
-            'russia': ['russia', 'rusya', 'russian', 'rus'],
-            'china': ['china', 'çin'],
-            'iran': ['iran', 'irani']
-        }
-        
-        if target_country.lower() in country_variations:
-            variations = country_variations[target_country.lower()]
-            for variation in variations:
-                if variation in text_lower:
-                    return True
-        
-        return False
-    
-    def _extract_gtip_snippet(self, text):
-        """Snippet GTIP çıkarma"""
-        patterns = [
-            r'\b\d{4}\.\d{2}\b',
-            r'\bGTIP[: ]*(\d{4}\.?\d{0,4})\b',
-            r'\bHS[: ]*CODE[: ]*(\d{4}\.?\d{0,4})\b',
-        ]
-        
-        all_codes = set()
-        
-        for pattern in patterns:
-            matches = re.findall(pattern, text, re.IGNORECASE)
-            for match in matches:
-                if isinstance(match, tuple):
-                    match = match[0]
-                
-                code = re.sub(r'[^\d]', '', match)
-                if len(code) >= 4 and len(code) <= 8:
-                    # Yılları filtrele
-                    if not self._is_year(code):
-                        all_codes.add(code[:4])
-        
-        return list(all_codes)
-    
-    def _is_year(self, code):
-        """Yıl kontrolü"""
-        if len(code) == 4:
-            try:
-                year = int(code)
-                return 1900 <= year <= 2030
-            except:
-                pass
-        return False
-    
-    def _extract_domain(self, url):
-        """Domain çıkar"""
-        try:
-            from urllib.parse import urlparse
-            return urlparse(url).netloc
-        except:
-            return ""
     
     def _calculate_confidence(self, crawl_result, sanctioned_gtips, domain):
         """Güven seviyesi"""
@@ -568,7 +625,7 @@ class SmartTradeAnalyzer:
         return min(confidence, 100)
     
     def create_analysis_result(self, company, country, search_result, crawl_result, sanctioned_gtips, confidence, country_connection_found):
-        """Analiz sonucu - basit ve net"""
+        """Analiz sonucu"""
         
         if country_connection_found:
             if sanctioned_gtips:
@@ -601,7 +658,7 @@ class SmartTradeAnalyzer:
             'URL': search_result['url'],
             'ÖZET': search_result['snippet'],
             'GÜVEN_SEVİYESİ': f"%{confidence}",
-            'KAYNAK_TİPİ': 'KALİTELİ'
+            'KAYNAK_TİPİ': search_result.get('search_engine', 'UNKNOWN')
         }
 
 def create_excel_report(results, company, country):
@@ -660,11 +717,11 @@ def create_excel_report(results, company, country):
 def display_results(results, company, country):
     """Sonuçları göster"""
     print(f"\n{'='*80}")
-    print(f"📊 AKILLI ANALİZ SONUÇLARI: '{company}' ↔ {country}")
+    print(f"📊 ANALİZ SONUÇLARI: '{company}' ↔ {country}")
     print(f"{'='*80}")
     
     if not results:
-        print("❌ Kaliteli analiz sonucu bulunamadı!")
+        print("❌ Analiz sonucu bulunamadı!")
         return
     
     total_results = len(results)
@@ -673,7 +730,7 @@ def display_results(results, company, country):
     country_connection_count = len([r for r in results if r.get('ULKE_BAGLANTISI') == 'EVET'])
     
     print(f"\n📈 ÖZET:")
-    print(f"   • Toplam Kaliteli Sonuç: {total_results}")
+    print(f"   • Toplam Sonuç: {total_results}")
     print(f"   • Ülke Bağlantısı: {country_connection_count}")
     print(f"   • YÜKSEK Yaptırım Riski: {high_risk_count}")
     print(f"   • ORTA Risk: {medium_risk_count}")
@@ -703,9 +760,9 @@ def display_results(results, company, country):
 
 def main():
     print("📊 AKILLI FİRMA ANALİZ SİSTEMİ")
-    print("🎯 HEDEF: Sadece kaliteli, ticari sonuçlar")
-    print("💡 AVANTAJ: Spam filtreleme, doğru GTIP tespiti")
-    print("🔍 Arama: DuckDuckGo Lite + Ticari siteler\n")
+    print("🎯 HEDEF: Çoklu arama motoru desteği")
+    print("💡 AVANTAJ: DuckDuckGo + Yandex + Ticaret siteleri")
+    print("🔍 Arama: Çoklu kaynak tarama\n")
     
     config = Config()
     analyzer = SmartTradeAnalyzer(config)
@@ -717,9 +774,9 @@ def main():
         print("❌ Şirket ve ülke bilgisi gereklidir!")
         return
     
-    print(f"\n🚀 AKILLI ANALİZ BAŞLATILIYOR: '{company}' ↔ {country}")
-    print("⏳ Sadece kaliteli ticaret siteleri taranıyor...")
-    print("   Spam ve alakasız sonuçlar otomatik filtreleniyor...\n")
+    print(f"\n🚀 ANALİZ BAŞLATILIYOR: '{company}' ↔ {country}")
+    print("⏳ Çoklu arama motorları kullanılıyor...")
+    print("   DuckDuckGo, Yandex, Ticaret siteleri taranıyor...\n")
     
     start_time = time.time()
     results = analyzer.smart_analyze(company, country)
@@ -748,7 +805,7 @@ def main():
         else:
             print("❌ Excel raporu oluşturulamadı!")
     else:
-        print("❌ Kaliteli analiz sonucu bulunamadı!")
+        print("❌ Analiz sonucu bulunamadı!")
 
 if __name__ == "__main__":
     main()
